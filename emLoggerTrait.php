@@ -1,11 +1,11 @@
 <?php
-namespace Stanford\ClassNameHere;
-/** @var ClassNameHere $this */
+namespace Stanford\RedcapOneDirectoryLookup;
 
+/** @var RedcapOneDirectoryLookup $this */
 trait emLoggerTrait
 {
     private $emLoggerEnabled = null;    // Cache logger enabled
-    private $emLoggerDebug   = null;    // Cache debug mode
+    private $emLoggerDebug = null;    // Cache debug mode
 
     /**
      * Obtain an instance of emLogger or false if not installed / active

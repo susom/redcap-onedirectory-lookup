@@ -1,2 +1,2 @@
-# ClassNameHere
-A template for a REDCap External Module
+# RedcapOneDirectoryLookup
+EM to lookup users using OneDirectory(Elastic Cache)
