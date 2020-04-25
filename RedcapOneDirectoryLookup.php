@@ -3,10 +3,16 @@ namespace Stanford\RedcapOneDirectoryLookup;
 
 require_once "emLoggerTrait.php";
 
+/**
+ * Class RedcapOneDirectoryLookup
+ * @package Stanford\RedcapOneDirectoryLookup
+ * @property array $fieldsMap
+ */
 class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
 {
-
     use emLoggerTrait;
+
+    private $fieldsMap;
 
     public function __construct()
     {
@@ -14,20 +20,58 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
         // Other code to run when object is instantiated
     }
 
-    public function redcap_module_system_enable($version)
+    private function processInstances()
     {
-		
-	}
+        $instances = $this->getSubSettings('instance');
 
-	
-	public function redcap_module_project_enable( $version, $project_id ) {
-		
-	}
+        $one = $this->getProjectSetting("one-directory-attribute");
+        $map = $this->getProjectSetting("mapped-field");
+        $fieldMap = $this->getFieldsMap();
+        foreach ($instances as $index => $instance) {
+            $ins = array();
+            $ins['search-field'] = $instance['search-field'];
+            foreach ($instance['attribute_instance'] as $a_index => $attribute) {
+                $k = $one[$index][$a_index];
+                $v = $map[$index][$a_index];
+                $ins['map'][] = array($k => $v);
+            }
+            $fieldMap[] = $ins;
+        }
+        $this->setFieldsMap($fieldMap);
+    }
 
-	
-	public function redcap_module_save_configuration( $project_id ) {
-		
-	}
+    public function redcap_data_entry_form_top($version)
+    {
+        $this->processInstances();
+    }
 
-	
+
+    public function redcap_survey_page_top($version, $project_id)
+    {
+
+    }
+
+    /**
+     * @return array
+     */
+    public function getFieldsMap()
+    {
+        return $this->fieldsMap;
+    }
+
+    /**
+     * @param array $fieldsMap
+     */
+    public function setFieldsMap($fieldsMap)
+    {
+        $this->fieldsMap = $fieldsMap;
+    }
+
+    /**
+     * @param string $path
+     */
+    public function includeFile($path)
+    {
+        include_once $path;
+    }
 }

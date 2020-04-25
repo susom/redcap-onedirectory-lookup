@@ -15,50 +15,125 @@
       "institution": "Stanford University"
     }
   ],
-
-	"permissions": [
-      "redcap_data_entry_form_top",
-      "redcap_survey_page_top"
+  "permissions": [
+    "redcap_data_entry_form_top",
+    "redcap_survey_page_top"
+  ],
+  "enable-every-page-hooks-on-system-pages": false,
+  "links": {
+    "project": [
     ],
-	
-	"enable-every-page-hooks-on-system-pages": false,	
-
-	"links": {
-		"project": [
-
-		],
-		"control-center": [
-
-		]
-	},
-
-	"no-auth-pages": [
-
-	],
-
-	"project-settings": [
-		{
-			"key": "enable-project-debug-logging",
-			"name": "<b>Enable Debug Logging</b><br><i>(optional)</i> Requires installation and configuration of emLogger",
-			"required": false,
-			"type": "checkbox"
-		}
-	],
-
-
-	"system-settings": [
-		{
-			"key": "enable-system-debug-logging",
-			"name": "<b>Enable Debug Logging (system-wide)</b><i>(optional)</i> Requires installation and configuration of emLogger",
-			"required": false,
-			"type": "checkbox"
-		}
-	],
-
-	"compatibility": {
-		"php-version-min": "",
-		"php-version-max": "",
-		"redcap-version-min": "",
-		"redcap-version-max": ""
-	}
+    "control-center": [
+    ]
+  },
+  "no-auth-pages": [
+  ],
+  "project-settings": [
+    {
+      "key": "instance",
+      "name": "<b>Search Instance</b>",
+      "required": true,
+      "type": "sub_settings",
+      "repeatable": true,
+      "sub_settings": [
+        {
+          "key": "search-field",
+          "name": "<b>Field used to lookup users<br>",
+          "required": true,
+          "type": "field-list"
+        },
+        {
+          "key": "attribute_instance",
+          "name": "<b>Attribute Instance Map</b>",
+          "required": true,
+          "type": "sub_settings",
+          "repeatable": true,
+          "sub_settings": [
+            {
+              "key": "one-directory-attribute",
+              "name": "<b>Select OneDirectory Attribute</b>",
+              "required": false,
+              "type": "dropdown",
+              "choices": [
+                {
+                  "name": "OneDirectoryId",
+                  "value": "OneDirectoryId"
+                },
+                {
+                  "name": "affiliate",
+                  "value": "affiliate"
+                },
+                {
+                  "name": "jobId",
+                  "value": "jobId"
+                },
+                {
+                  "name": "first_name",
+                  "value": "first_name"
+                },
+                {
+                  "name": "last_name",
+                  "value": "last_name"
+                },
+                {
+                  "name": "fullname",
+                  "value": "fullname"
+                },
+                {
+                  "name": "phone",
+                  "value": "phone"
+                },
+                {
+                  "name": "phone2",
+                  "value": "phone2"
+                },
+                {
+                  "name": "email",
+                  "value": "email"
+                },
+                {
+                  "name": "title",
+                  "value": "title"
+                },
+                {
+                  "name": "cap",
+                  "value": "cap"
+                },
+                {
+                  "name": "suid",
+                  "value": "suid"
+                }
+              ]
+            },
+            {
+              "key": "mapped-field",
+              "name": "<b>Select Project field where to save the OneDirectory Attribute<br>",
+              "required": true,
+              "type": "field-list"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "enable-project-debug-logging",
+      "name": "<b>Enable Debug Logging</b><br><i>(optional)</i> Requires installation and configuration of emLogger",
+      "required": false,
+      "type": "checkbox"
+    }
+  ],
+  "system-settings": [
+    {
+      "key": "enable-system-debug-logging",
+      "name": "<b>Enable Debug Logging (system-wide)</b><i>(optional)</i> Requires installation and configuration of emLogger",
+      "required": false,
+      "type": "checkbox"
+    }
+  ],
+  "compatibility": {
+    "php-version-min": "",
+    "php-version-max": "",
+    "redcap-version-min": "",
+    "redcap-version-max": ""
+  }
 }
