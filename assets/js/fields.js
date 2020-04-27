@@ -13,8 +13,7 @@ Fields = {
             if ($('input[name ="' + name + '"]').length) {
                 Fields.addInputToList(i, name);
                 Fields.makeInputAutoComplete(name);
-                console.log(name)
-                //$('input[name ="'+name+'"]').after('<div><img src="'+Fields.image+'" title="Search Users"  style="margin-bottom:1px;"></div>')
+                $('input[name ="' + name + '"]').after('<div><img src="' + Fields.image + '" title="Search Users"  style="margin-bottom:1px;"></div>')
             }
         }
     },

@@ -9,6 +9,12 @@ namespace Stanford\RedcapOneDirectoryLookup;
     .ui-autocomplete-loading {
         background: url('<?php echo $this->getUrl("assets/images/progress.gif", true, true) ?>') no-repeat right center
     }
+
+    .ui-autocomplete-input {
+        float: left;
+        margin-right: 5px;
+    }
+
 </style>
 <script src="//ajax.googleapis.com/ajax/libs/jquery/3.4.0/jquery.min.js"></script>
 <link rel="stylesheet" href="//code.jquery.com/ui/1.12.0/themes/base/jquery-ui.css">
@@ -19,5 +25,6 @@ namespace Stanford\RedcapOneDirectoryLookup;
        value="<?php echo $this->getUrl("ajax/get_users.php", false, false) ?>"/>
 <script src="<?php echo $this->getUrl("assets/js/fields.js", true, true) ?>"></script>
 <script>
+    Fields.image = '<?php echo $this->getUrl("assets/images/magnifier.png", true, true) ?>';
     Fields.list = <?php echo json_encode($this->getFieldsMap()) ?>
 </script>
