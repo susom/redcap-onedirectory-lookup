@@ -39,7 +39,7 @@ Fields = {
         console.log(m)
         for (var key in m) {
             if (m.hasOwnProperty(key)) {
-                $('input[name ="' + m[key] + '"]').val(Fields.user[key])
+                $('[name ="' + m[key] + '"]').val(Fields.user[key])
             }
         }
     },
