@@ -122,7 +122,7 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
     /**
      * @return \GuzzleHttp\Client
      */
-    public function getClient(): \GuzzleHttp\Client
+    public function getClient()
     {
         return $this->client;
     }
@@ -130,7 +130,7 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
     /**
      * @param \GuzzleHttp\Client $client
      */
-    public function setClient(\GuzzleHttp\Client $client): void
+    public function setClient(\GuzzleHttp\Client $client)
     {
         $this->client = $client;
     }
