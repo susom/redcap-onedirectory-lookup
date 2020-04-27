@@ -40,15 +40,22 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
         $this->setFieldsMap($fieldMap);
     }
 
-    public function redcap_data_entry_form_top($version)
+    private function processFields()
     {
         $this->processInstances();
+
+        $this->includeFile('view/fields.php');
+    }
+
+    public function redcap_data_entry_form_top($version)
+    {
+        $this->processFields();
     }
 
 
     public function redcap_survey_page_top($version, $project_id)
     {
-
+        $this->processFields();
     }
 
     /**

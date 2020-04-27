@@ -1,8 +1,10 @@
 Fields = {
     list: {},
     init: function () {
-
+        console.log(Fields.list);
     }
 }
-
-Fields.init();
+//run function once load is complete.
+window.onload = function () {
+    Fields.init();
+}

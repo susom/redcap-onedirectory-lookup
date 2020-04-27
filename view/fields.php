@@ -12,5 +12,5 @@ namespace Stanford\RedcapOneDirectoryLookup;
 
 <script src="<?php echo $this->getUrl("assets/js/fields.js", true, true) ?>"></script>
 <script>
-    Fields.list = <?php echo $this->getFieldsMap() ?>
+    Fields.list = <?php echo json_encode($this->getFieldsMap()) ?>
 </script>
