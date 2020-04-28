@@ -32,7 +32,18 @@ Fields = {
 
                 Fields.findSearchFieldMap(Fields.$input.attr('name'));
 
-                return Fields.fillInformation();
+                Fields.fillInformation();
+            }
+        }).autocomplete("instance")._renderItem = function (ul, item) {
+            // customize layout of the results
+            return $("<li>")
+                .append("<div><img src='" + item.image + "' height='20px'/><strong> " + item.label + "</strong><br>" + item.title + "</div>")
+                .appendTo(ul);
+        };
+        // if value already saved search for that value on focus
+        $('input[name ="' + name + '"]').focus(function (event, ui) {
+            if ($(this).val() != '') {
+                $(this).autocomplete('search', $(this).val())
             }
         });
     },

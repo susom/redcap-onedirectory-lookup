@@ -37,8 +37,8 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
           "query": {
             "multi_match" : {
               "query":      "' . $term . '",
-              "type":       "phrase",
-              "fields":     [ "_all" ]
+              "type":       "most_fields",
+              "fields":     [ "first_name", "last_name", "fullname", "email", "affiliate", "title", "suid" ]
             }
           }
         }'
@@ -57,11 +57,20 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
         $result = array();
         if ($response->hits->total > 0) {
             foreach ($response->hits->hits as $item) {
+                if ($item->_source->affiliate == "Stanford University") {
+                    $image = $this->getUrl('assets/images/stanford_university.png', false, false);
+                } else {
+                    $image = $this->getUrl('assets/images/stanford_medicine.png', false, false);;
+                }
+
                 $result[] = array(
                     'id' => $item->_id,
-                    'label' => $item->_source->fullname . "\n" . $item->_source->title,
-                    'value' => $item->_source->fullname . "\n" . $item->_source->title,
-                    'array' => $item->_source
+                    'label' => $item->_source->fullname,
+                    'title' => $item->_source->title,
+                    'suid' => $item->_source->suid,
+                    'value' => $item->_source->fullname,
+                    'array' => $item->_source,
+                    'image' => $image
                 );
             }
         }
