@@ -7,7 +7,9 @@ namespace Stanford\RedcapOneDirectoryLookup;
 ?>
 <style>
     .ui-autocomplete-loading {
-        background: url('<?php echo $this->getUrl("assets/images/progress.gif", true, true) ?>') no-repeat right center
+        background: url('<?php echo $this->getUrl("assets/images/progress_circle.gif", true, true) ?>') no-repeat right center;
+        background-size: 20px 20px;
+        progress_circle . gif
     }
 
     .ui-autocomplete-input {

@@ -3,6 +3,8 @@ Fields = {
     user: {},
     $input: null,
     map: {},
+    alert: false,
+    cancel: false,
     init: function () {
         Fields.searchPage();
     },
@@ -28,27 +30,41 @@ Fields = {
                 Fields.user = ui.item['array'];
                 Fields.$input = $(event.target)
 
-                Fields.map = Fields.findSearchFieldMap(Fields.$input.attr('name'));
+                Fields.findSearchFieldMap(Fields.$input.attr('name'));
 
-                Fields.fillInformation();
+                return Fields.fillInformation();
             }
         });
     },
     fillInformation: function () {
         var m = Fields.map;
-        console.log(m)
+
         for (var key in m) {
             if (m.hasOwnProperty(key)) {
-                $('[name ="' + m[key] + '"]').val(Fields.user[key])
+                if (Fields.alert && $('[name ="' + m[key] + '"]').val() !== '' && !Fields.cancel) {
+                    if (confirm("Input has data on it are you sure you want to override existing data? ")) {
+                        $('[name ="' + m[key] + '"]').val(Fields.user[key]);
+                        console.log(m[key])
+                        // once we accept one time then the same action will be applied to all inputs
+                        Fields.alert = false;
+                    } else {
+                        return false;
+                    }
+                } else if (!Fields.cancel) {
+                    $('[name ="' + m[key] + '"]').val(Fields.user[key]);
+                }
+
             }
         }
+        return true;
     },
 
     findSearchFieldMap: function (name) {
         var l = Fields.list;
         for (i = 0; i < l.length; i++) {
             if (Fields.list[i]['search-field'] == name) {
-                return Fields.list[i]['map'];
+                Fields.map = Fields.list[i]['map'];
+                Fields.alert = Fields.list[i]['alert-if-exist'];
             }
         }
         return false;

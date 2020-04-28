@@ -5,7 +5,7 @@ require_once "emLoggerTrait.php";
 
 use GuzzleHttp\Client;
 
-define("ELASTIC_CACHE_URL", "https://onedirectory.stanford.edu/api/onedirectory/_search?q=");
+define("ELASTIC_CACHE_URL", "https://onedirectory.stanford.edu/api/onedirectory/_search?size=500");
 
 /**
  * Class RedcapOneDirectoryLookup
@@ -31,7 +31,18 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
 
     public function searchUsers($term)
     {
-        $res = $this->getClient()->request('GET', ELASTIC_CACHE_URL . $term);
+        //search in all fields for all words provided
+        $res = $this->getClient()->request('GET', ELASTIC_CACHE_URL, [
+            'body' => '{
+          "query": {
+            "multi_match" : {
+              "query":      "' . $term . '",
+              "type":       "phrase",
+              "fields":     [ "_all" ]
+            }
+          }
+        }'
+        ]);
 
 
         return $this->processOneDirectoryResponse($res->getBody()->getContents());
@@ -48,8 +59,8 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
             foreach ($response->hits->hits as $item) {
                 $result[] = array(
                     'id' => $item->_id,
-                    'label' => $item->_source->fullname,
-                    'value' => $item->_source->fullname,
+                    'label' => $item->_source->fullname . "\n" . $item->_source->title,
+                    'value' => $item->_source->fullname . "\n" . $item->_source->title,
                     'array' => $item->_source
                 );
             }
@@ -67,6 +78,7 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
         foreach ($instances as $index => $instance) {
             $ins = array();
             $ins['search-field'] = $instance['search-field'];
+            $ins['alert-if-exist'] = $instance['alert-if-exist'];
             foreach ($instance['attribute_instance'] as $a_index => $attribute) {
                 $k = $one[$index][$a_index];
                 $v = $map[$index][$a_index];

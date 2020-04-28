@@ -37,6 +37,12 @@
       "repeatable": true,
       "sub_settings": [
         {
+          "key": "alert-if-exist",
+          "name": "<b>Alert user if data already saved before update<br>",
+          "required": true,
+          "type": "checkbox"
+        },
+        {
           "key": "search-field",
           "name": "<b>Field used to lookup users<br>",
           "required": true,
@@ -96,11 +102,7 @@
                   "value": "title"
                 },
                 {
-                  "name": "cap",
-                  "value": "cap"
-                },
-                {
-                  "name": "suid",
+                  "name": "SUNet of SID",
                   "value": "suid"
                 }
               ]
