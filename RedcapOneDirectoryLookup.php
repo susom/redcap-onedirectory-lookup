@@ -5,8 +5,6 @@ require_once "emLoggerTrait.php";
 
 use GuzzleHttp\Client;
 
-define("ELASTIC_CACHE_URL", "https://onedirectory.stanford.edu/api/onedirectory/_search?size=500");
-
 /**
  * Class RedcapOneDirectoryLookup
  * @package Stanford\RedcapOneDirectoryLookup
@@ -21,6 +19,8 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
 
     private $client;
 
+    const ELASTIC_CACHE_URL = "https://onedirectory.stanford.edu/api/onedirectory/_search?size=500";
+
 
     public function __construct()
     {
@@ -29,24 +29,45 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
         $this->setClient(new Client);
     }
 
+
+    public function redcap_data_entry_form_top($project_id, $record, $instrument, $event_id, $group_id, $repeat_instance)
+    {
+        $this->processFields($instrument);
+    }
+
+
+    public function redcap_survey_page_top($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance)
+    {
+        $this->processFields($instrument);
+    }
+
+
+
+
+
+    /**
+     * Perform a OneDirectory Search
+     * @param $term
+     * @return array
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     */
     public function searchUsers($term)
     {
-        //search in all fields for all words provided
-        $res = $this->getClient()->request('GET', ELASTIC_CACHE_URL, [
+        $res = $this->getClient()->request('GET', self::ELASTIC_CACHE_URL, [
             'body' => '{
-          "query": {
-            "multi_match" : {
-              "query":      "' . $term . '",
-              "type":       "most_fields",
-              "fields":     [ "first_name", "last_name", "fullname", "email", "affiliate", "title", "suid" ]
+            "query": {
+                "multi_match" : {
+                    "query"   : "' . $term . '",
+                    "type"    : "most_fields",
+                    "fields"  : [ "first_name", "last_name", "fullname", "email", "affiliate", "title", "suid" ]
+                }
             }
-          }
         }'
         ]);
 
-
         return $this->processOneDirectoryResponse($res->getBody()->getContents());
     }
+
 
     /**
      *
@@ -64,10 +85,10 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
                 }
 
                 $result[] = array(
-                    'id' => $item->_id,
+                    'id'    => $item->_id,
                     'label' => $item->_source->fullname,
                     'title' => $item->_source->title,
-                    'suid' => $item->_source->suid,
+                    'suid'  => $item->_source->suid,
                     'value' => $item->_source->fullname,
                     'array' => $item->_source,
                     'image' => $image
@@ -77,20 +98,28 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
         return $result;
     }
 
+
+    /**
+     * Loop through config and set the $fieldMap which will be passed through to the javascript code
+     */
     private function processInstances()
     {
         $instances = $this->getSubSettings('instance');
 
-        $one = $this->getProjectSetting("one-directory-attribute");
-        $map = $this->getProjectSetting("mapped-field");
+        // Array of all lookup instances then the values from the lookup result being used
+        $lookup_result_attributes = $this->getProjectSetting("one-directory-attribute");
+
+        // Matching array of fields in the project where the lookup results will be placed
+        $lookup_result_fields = $this->getProjectSetting("mapped-field");
+
         $fieldMap = $this->getFieldsMap();
         foreach ($instances as $index => $instance) {
             $ins = array();
-            $ins['search-field'] = $instance['search-field'];
+            $ins['search-field']   = $instance['search-field'];
             $ins['alert-if-exist'] = $instance['alert-if-exist'];
             foreach ($instance['attribute_instance'] as $a_index => $attribute) {
-                $k = $one[$index][$a_index];
-                $v = $map[$index][$a_index];
+                $k = $lookup_result_attributes[$index][$a_index];
+                $v = $lookup_result_fields[$index][$a_index];
                 $ins['map'][$k] = $v;
             }
             $fieldMap[] = $ins;
@@ -98,23 +127,20 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
         $this->setFieldsMap($fieldMap);
     }
 
-    private function processFields()
+
+    private function processFields($instrument)
     {
         $this->processInstances();
 
-        $this->includeFile('view/fields.php');
+        // Determine if search-fields are in instrument
+        $fields = [];
+        foreach ($this->fieldsMap as $instance) array_push($fields, $instance['search-field']);
+        $instrument_fields = \REDCap::getFieldNames($instrument);
+        if (count(array_intersect($fields, $instrument_fields)) > 0) {
+            $this->includeFile('view/fields.php');
+        }
     }
 
-    public function redcap_data_entry_form_top($version)
-    {
-        $this->processFields();
-    }
-
-
-    public function redcap_survey_page_top($version, $project_id)
-    {
-        $this->processFields();
-    }
 
     /**
      * @return array
@@ -124,6 +150,7 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
         return $this->fieldsMap;
     }
 
+
     /**
      * @param array $fieldsMap
      */
@@ -131,6 +158,7 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
     {
         $this->fieldsMap = $fieldsMap;
     }
+
 
     /**
      * @param string $path
@@ -140,6 +168,7 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
         include_once $path;
     }
 
+
     /**
      * @return \GuzzleHttp\Client
      */
@@ -147,6 +176,7 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
     {
         return $this->client;
     }
+
 
     /**
      * @param \GuzzleHttp\Client $client

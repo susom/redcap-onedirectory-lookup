@@ -27,6 +27,7 @@
     ]
   },
   "no-auth-pages": [
+      "ajax/get_users"
   ],
   "project-settings": [
     {

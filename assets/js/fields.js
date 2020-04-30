@@ -15,7 +15,7 @@ Fields = {
             if ($('input[name ="' + name + '"]').length) {
                 Fields.addInputToList(i, name);
                 Fields.makeInputAutoComplete(name);
-                $('input[name ="' + name + '"]').after('<div><img src="' + Fields.image + '" title="Search Users"  style="margin-bottom:1px;"></div>')
+                $('input[name ="' + name + '"]').after('<div><img src="' + Fields.image + '" title="Search Users"  style="margin-bottom:1px;"></div><div class="space"></div>')
             }
         }
     },
@@ -24,7 +24,7 @@ Fields = {
     },
     makeInputAutoComplete: function (name) {
         $('input[name ="' + name + '"]').autocomplete({
-            source: $("#get-users-ajax-url").val(),
+            source: Fields.ajaxUrl,
             minLength: 2,
             select: function (event, ui) {
                 Fields.user = ui.item['array'];
@@ -37,7 +37,11 @@ Fields = {
         }).autocomplete("instance")._renderItem = function (ul, item) {
             // customize layout of the results
             return $("<li>")
-                .append("<div><img src='" + item.image + "' height='20px'/><strong> " + item.label + "</strong><br>" + item.title + "</div>")
+                .append("<img class='mt-1 float-left' src='" + item.image + "' height='32px'/>" +
+                    "<div class=''>" +
+                        "<span class='user_name'>" + item.label + "</span><br/>" +
+                        "<span class='user_title'>" + item.title + "</span>" +
+                    "</div>")
                 .appendTo(ul);
         };
         // if value already saved search for that value on focus
