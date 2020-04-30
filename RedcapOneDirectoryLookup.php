@@ -19,7 +19,7 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
 
     private $client;
 
-    const ELASTIC_CACHE_URL = "https://onedirectory.stanford.edu/api/onedirectory/_search?size=500";
+    const ELASTIC_CACHE_URL = "https://onedirectory.stanford.edu/api/onedirectory/_search?size=50";
 
 
     public function __construct()
@@ -53,19 +53,24 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
      */
     public function searchUsers($term)
     {
-        $res = $this->getClient()->request('GET', self::ELASTIC_CACHE_URL, [
-            'body' => '{
-            "query": {
-                "multi_match" : {
-                    "query"   : "' . $term . '",
-                    "type"    : "most_fields",
-                    "fields"  : [ "first_name", "last_name", "fullname", "email", "affiliate", "title", "suid" ]
-                }
-            }
-        }'
+        // Build search object
+        $search = new \stdClass();
+        $search->query->multi_match->query  = $term;
+        $search->query->multi_match->fields = [ "_all" ];
+
+        // Tried other searches but wouldn't return sunet lookup or email lookups.  I think
+        // those fields don't have indexing configured so it can't do much
+
+        // $search->query->multi_match->term   = "most_fields";
+        // $search->query->multi_match->fields = [ "first_name", "last_name", "fullname", "email", "affiliate", "title", "suid" ];
+
+        // Do a search
+        $q = $this->getClient()->request('GET', self::ELASTIC_CACHE_URL, [
+            'body' => json_encode($search)
         ]);
 
-        return $this->processOneDirectoryResponse($res->getBody()->getContents());
+        $result = $q->getBody()->getContents();
+        return $this->processOneDirectoryResponse($result);
     }
 
 

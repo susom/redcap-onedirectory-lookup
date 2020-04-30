@@ -17,11 +17,20 @@ namespace Stanford\RedcapOneDirectoryLookup;
         margin-right: 5px;
     }
 
+    /*.ui-state-active*/
+    /*{*/
+    /*    border:1px transparent !important;*/
+    /*    background:none !important;*/
+    /*    !*font-weight:400;*!*/
+    /*    color:inherit !important;*/
+    /*}*/
+
     .user_name {
         font-weight: bold;
     }
 
     .user_title {
+        font-size:smaller;
         color: #333;
     }
 
