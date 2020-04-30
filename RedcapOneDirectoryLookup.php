@@ -84,9 +84,9 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
         if ($response->hits->total > 0) {
             foreach ($response->hits->hits as $item) {
                 if ($item->_source->affiliate == "Stanford University") {
-                    $image = $this->getUrl('assets/images/stanford_university.png', false, false);
+                    $image = $this->getUrl('assets/images/stanford_university.png', true, true);
                 } else {
-                    $image = $this->getUrl('assets/images/stanford_medicine.png', false, false);;
+                    $image = $this->getUrl('assets/images/stanford_medicine.png', true, true);;
                 }
 
                 $result[] = array(
