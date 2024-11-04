@@ -19,7 +19,7 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
 
     private $client;
 
-    const ELASTIC_CACHE_URL = "https://onedirectory.stanford.edu/api/onedirectory/_search?size=50";
+    private $serverURL = '';
 
 
     public function __construct()
@@ -65,7 +65,7 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
         // $search->query->multi_match->fields = [ "first_name", "last_name", "fullname", "email", "affiliate", "title", "suid" ];
 
         // Do a search
-        $q = $this->getClient()->request('GET', self::ELASTIC_CACHE_URL, [
+        $q = $this->getClient()->request('GET', $this->getServerURL(), [
             'body' => json_encode($search)
         ]);
 
@@ -190,4 +190,25 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
     {
         $this->client = $client;
     }
+
+    /**
+     * @return string
+     */
+    public function getServerURL(): string
+    {
+        if(!$this->serverURL){
+            $this->setServerURL($this->getSystemSetting('onedirectory-url'));
+        }
+        return $this->serverURL;
+    }
+
+    /**
+     * @param string $serverURL
+     */
+    public function setServerURL(string $serverURL): void
+    {
+        $this->serverURL = $serverURL;
+    }
+
+
 }

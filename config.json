@@ -127,6 +127,12 @@
   ],
   "system-settings": [
     {
+      "key": "onedirectory-url",
+      "name": "<b>URL to Onedirectory server:</b>",
+      "required": true,
+      "type": "text"
+    },
+    {
       "key": "enable-system-debug-logging",
       "name": "<b>Enable Debug Logging (system-wide)</b><i>(optional)</i> Requires installation and configuration of emLogger",
       "required": false,
