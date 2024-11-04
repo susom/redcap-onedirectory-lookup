@@ -54,9 +54,18 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
     public function searchUsers($term)
     {
         // Build search object
-        $search = new \stdClass();
-        $search->query->multi_match->query  = $term;
-        $search->query->multi_match->fields = [ "_all" ];
+        $headers = [
+          'Content-Type' => 'application/json'
+        ];
+        $body = '{
+          "query": {
+            "multi_match": {
+              "query": "'.$term.'",
+              "operator": "and",
+              "type": "best_fields"
+            }
+          }
+        }';
 
         // Tried other searches but wouldn't return sunet lookup or email lookups.  I think
         // those fields don't have indexing configured so it can't do much
@@ -65,8 +74,9 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
         // $search->query->multi_match->fields = [ "first_name", "last_name", "fullname", "email", "affiliate", "title", "suid" ];
 
         // Do a search
-        $q = $this->getClient()->request('GET', $this->getServerURL(), [
-            'body' => json_encode($search)
+        $q = $this->getClient()->post($this->getServerURL(), [
+            'body' => $body,
+            'headers' => $headers,
         ]);
 
         $result = $q->getBody()->getContents();
