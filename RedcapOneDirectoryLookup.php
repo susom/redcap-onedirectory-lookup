@@ -60,9 +60,7 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
         $body = '{
           "query": {
             "multi_match": {
-              "query": "'.$term.'",
-              "operator": "and",
-              "type": "best_fields"
+              "query": "'.$term.'"
             }
           }
         }';
