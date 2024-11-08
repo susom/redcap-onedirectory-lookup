@@ -62,7 +62,7 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
           "query": {
             "multi_match": {
               "query": "'.$term.'",
-              "fuzziness": "AUTO"
+              "analyzer": "standard"
             }
           }
         }';
