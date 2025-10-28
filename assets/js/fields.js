@@ -5,9 +5,9 @@ Fields = {
     map: {},
     alert: false,
     cancel: false,
+    SuImage: '',
+    SoMImage: '',
     _acState: {}, // per-input autocomplete pagination state
-    // Inline SVG loader (32x32), used while profile image is loading
-    loadingImage: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid"><circle cx="50" cy="50" r="32" stroke-width="10" stroke="#999" stroke-dasharray="50.26548245743669 50.26548245743669" fill="none" stroke-linecap="round"><animateTransform attributeName="transform" type="rotate" repeatCount="indefinite" dur="1s" values="0 50 50;360 50 50" keyTimes="0;1"></animateTransform></circle></svg>',
     init: function () {
         Fields.searchPage();
     },
@@ -125,45 +125,37 @@ Fields = {
             });
         });
         $('input[name ="' + name + '"]').autocomplete("instance")._renderItem = function (ul, item) {
-            // item is one entry from preview (URL image expected, not base64)
-            var intendedSrc = item.image || Fields.image || '';
-
-            // If the backend photo endpoint supports companyName, append it
+            // item is one entry from preview (URL image expected, points to get_user_photo)
             var companyName = (item && item.array && item.array.companyName) || item.companyName || '';
+            var intendedSrc = item.image || '';
+            // Append companyName so backend can pick the proper fallback/branding if needed
             if (intendedSrc && companyName) {
                 intendedSrc = Fields.addQueryParam(intendedSrc, 'companyName', companyName);
             }
+            // Choose default image based on company
+            var defaultImg = (companyName === 'Stanford University') ? (Fields.SuImage || Fields.SoMImage || Fields.image || '')
+                                                                    : (Fields.SoMImage || Fields.SuImage || Fields.image || '');
 
             // Thumbnail container with fixed size to avoid layout shifts
             var $thumb = $('<div>')
                 .css({ width: '32px', height: '32px', position: 'relative', marginRight: '8px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' });
 
-            // Bootstrap spinner placeholder (ensure bootstrap.css is loaded in the page)
-            var $spinner = $('<div class="spinner-border spinner-border-sm" role="status">')
-                .css({ width: '24px', height: '24px', borderWidth: '2px' });
-
-            // Real image element, hidden until loaded
+            // Start with default image visible
             var $img = $('<img>')
                 .attr('alt', 'user')
-                .css({ width: '32px', height: '32px', display: 'none' });
+                .attr('src', defaultImg)
+                .css({ width: '32px', height: '32px', display: 'block' });
 
-            $thumb.append($spinner).append($img);
+            $thumb.append($img);
 
-            // Preload actual image to avoid layout shift
+            // Preload actual profile image from backend, then swap in
             if (intendedSrc) {
                 var preload = new Image();
                 preload.onload = function () {
-                    $img.attr('src', intendedSrc).show();
-                    $spinner.hide();
+                    $img.attr('src', intendedSrc);
                 };
                 preload.onerror = function () {
-                    // fallback to default static image if load fails
-                    if (Fields.image) {
-                        $img.attr('src', Fields.image).show();
-                        $spinner.hide();
-                    } else {
-                        // keep spinner if no fallback image
-                    }
+                    // keep default image if load fails
                 };
                 preload.src = intendedSrc;
             }

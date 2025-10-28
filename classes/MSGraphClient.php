@@ -4,6 +4,8 @@ namespace Stanford\RedcapOneDirectoryLookup;
 
 
 use Google\ApiCore\ApiException;
+use GuzzleHttp\Client as GuzzleClient;
+use GuzzleHttp\Exception\GuzzleException;
 use Microsoft\Graph\GraphServiceClient;
 use Microsoft\Kiota\Authentication\Oauth\ClientCredentialContext;
 use Microsoft\Graph\Generated\Users\UsersRequestBuilderGetQueryParameters;
@@ -27,6 +29,9 @@ class MSGraphClient
     private $SUImage;
 
     private $SoMImage;
+    /** Cached app-only Graph access token and its expiry (epoch seconds) */
+    private ?string $accessToken = null;
+    private int $accessTokenExpiresAt = 0;
     /**
      * Default attributes to $select for users queries.
      * Note: Navigation property `manager` is handled via $expand and not included here.
@@ -345,5 +350,67 @@ class MSGraphClient
 
         }
         return $this->SoMImage;
+    }
+    /**
+     * Acquire an app-only access token for Microsoft Graph using client credentials.
+     * The token is cached until ~60 seconds before expiry.
+     */
+    public function getAccessToken(): ?string
+    {
+        $now = time();
+        if ($this->accessToken && ($this->accessTokenExpiresAt - 60) > $now) {
+            return $this->accessToken;
+        }
+
+        // Load credentials from Secret Manager
+        $tenantId = trim($this->secretManager->getSecret(self::MS_GRAPH_TENANT_ID));
+        $clientId = trim($this->secretManager->getSecret(self::MS_GRAPH_CLIENT_ID));
+        $clientSecret = $this->secretManager->getSecret(self::MS_GRAPH_CLIENT_SECRET);
+        if ($tenantId === '' || $clientId === '' || $clientSecret === '') {
+            error_log('[MSGraphClient] Missing Graph app credentials (TENANT/CLIENT_ID/CLIENT_SECRET).');
+            return null;
+        }
+
+        $authorityHost = 'https://login.microsoftonline.com';
+        $tokenEndpoint = $authorityHost . '/' . rawurlencode($tenantId) . '/oauth2/v2.0/token';
+
+        $http = new GuzzleClient([
+            'timeout' => 5.0,
+            'connect_timeout' => 2.0,
+        ]);
+        try {
+            $resp = $http->post($tokenEndpoint, [
+                'form_params' => [
+                    'client_id' => $clientId,
+                    'client_secret' => $clientSecret,
+                    'scope' => 'https://graph.microsoft.com/.default',
+                    'grant_type' => 'client_credentials',
+                ],
+                'headers' => [
+                    'Accept' => 'application/json',
+                ],
+            ]);
+            $status = $resp->getStatusCode();
+            $body = (string) $resp->getBody();
+            if ($status !== 200) {
+                error_log('[MSGraphClient] Token request failed: HTTP ' . $status . ' body=' . substr($body, 0, 500));
+                return null;
+            }
+            $json = json_decode($body, true);
+            if (!is_array($json) || empty($json['access_token'])) {
+                error_log('[MSGraphClient] Token response missing access_token: ' . substr($body, 0, 500));
+                return null;
+            }
+            $this->accessToken = $json['access_token'];
+            $expiresIn = isset($json['expires_in']) ? (int)$json['expires_in'] : 3600;
+            $this->accessTokenExpiresAt = $now + max(300, $expiresIn);
+            return $this->accessToken;
+        } catch (GuzzleException $e) {
+            error_log('[MSGraphClient] Token request error: ' . $e->getMessage());
+            return null;
+        } catch (\Throwable $e) {
+            error_log('[MSGraphClient] Token request unexpected error: ' . $e->getMessage());
+            return null;
+        }
     }
 }

@@ -37,7 +37,7 @@ try {
     header('Content-Type: image/jpeg');
     header('Cache-Control: private, max-age=300');
     echo $bytes;
-} catch (\Exception $e) {
+} catch (\Throwable $e) {
     // No photo or no permission
     if ($company == "Stanford University") {
         $image = $module->getUrl('assets/images/stanford_university.png', true, true);

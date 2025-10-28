@@ -46,6 +46,8 @@ namespace Stanford\RedcapOneDirectoryLookup;
 <script src="<?php echo $this->getUrl("assets/js/fields.js", true, true) ?>"></script>
 
 <script>
+    Fields.SuImage = '<?php echo $this->getUrl('assets/images/stanford_university.png', true, true) ?>';
+    Fields.SoMImage = '<?php echo $this->getUrl('assets/images/stanford_medicine.png', true, true) ?>';
     Fields.ajaxUrl = '<?php echo $this->getUrl("ajax/get_users.php", true, true) ?>';
     Fields.image = '<?php echo $this->getUrl("assets/images/magnifier.png", true, true) ?>';
     Fields.list = <?php echo json_encode($this->getFieldsMap()) ?>
