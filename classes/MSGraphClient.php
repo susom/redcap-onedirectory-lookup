@@ -12,7 +12,7 @@ use Microsoft\Kiota\Abstractions\RequestInformation;
 use Microsoft\Kiota\Abstractions\HttpMethod;
 use Microsoft\Graph\Generated\Models\UserCollectionResponse;
 
-
+// Test commit.
 class MSGraphClient
 {
     const MS_GRAPH_CLIENT_ID = 'MS_GRAPH_CLIENT_ID';
