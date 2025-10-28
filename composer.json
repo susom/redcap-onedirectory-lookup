@@ -1,0 +1,12 @@
+{
+    "require": {
+        "google/cloud-secret-manager": "^2.2",
+        "microsoft/microsoft-graph": "^2.49"
+    },
+    "config": {
+        "allow-plugins": {
+            "php-http/discovery": true,
+            "tbachert/spi": true
+        }
+    }
+}

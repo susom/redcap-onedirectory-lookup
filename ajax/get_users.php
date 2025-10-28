@@ -2,14 +2,17 @@
 
 namespace Stanford\RedcapOneDirectoryLookup;
 
+use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Psr7;
 use GuzzleHttp\Exception\RequestException;
 
 /** @var RedcapOneDirectoryLookup $module */
 
 try {
-    $term = filter_var($_GET['term'], FILTER_SANITIZE_STRING);
-    $response = $module->searchUsers($term);
+    $term = htmlentities($_GET['term']);
+    $nextLink = $_GET['next_page'];
+
+    $response = $module->searchUsers($term, $nextLink);
     echo json_encode($response);
 } catch (\LogicException $e) {
     echo json_encode(array('status' => 'error', 'message' => $e->getMessage()));
@@ -19,5 +22,7 @@ try {
         echo json_encode(array('status' => 'error', 'message' => Psr7\str($e->getResponse())));
     }
 } catch (\Exception $e) {
+    echo json_encode(array('status' => 'error', 'message' => $e->getMessage()));
+} catch (GuzzleException $e) {
     echo json_encode(array('status' => 'error', 'message' => $e->getMessage()));
 }

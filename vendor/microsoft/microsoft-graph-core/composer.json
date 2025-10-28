@@ -1,0 +1,44 @@
+{
+	"name": "microsoft/microsoft-graph-core",
+	"type": "library",
+	"description": "The Microsoft Graph Core SDK for PHP",
+	"homepage": "https://developer.microsoft.com/en-us/graph",
+	"license": "MIT",
+	"authors": [
+		{
+			"name": "Microsoft Graph Client Tooling",
+			"email": "graphtooling@service.microsoft.com",
+			"role": "Developer"
+		}
+	],
+	"require": {
+		"php": "^8.0 || ^7.4",
+		"microsoft/kiota-authentication-phpleague": "^1.5.0",
+		"microsoft/kiota-http-guzzle": "^1.5.0",
+		"microsoft/kiota-serialization-json": "^1.5.0",
+		"microsoft/kiota-serialization-text": "^1.5.0",
+		"microsoft/kiota-serialization-form": "^1.5.0",
+		"microsoft/kiota-serialization-multipart": "^1.5.0",
+		"ext-json": "*"
+	},
+	"require-dev": {
+		"phpunit/phpunit": "^9.0",
+		"mikey179/vfsstream": "^1.2",
+		"phpstan/phpstan": "^0.12.90 || ^1.0.0"
+	},
+	"autoload": {
+		"psr-4": {
+			"Microsoft\\Graph\\Core\\": "src/"
+		}
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"Microsoft\\Graph\\Core\\Test\\": "tests/"
+		}
+	},
+	"config": {
+        "allow-plugins": {
+            "php-http/discovery": false
+        }
+    }
+}

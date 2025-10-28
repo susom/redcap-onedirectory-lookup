@@ -1,148 +1,292 @@
 {
-  "name": "RedcapOneDirectoryLookup",
-  "namespace": "Stanford\\RedcapOneDirectoryLookup",
-  "description": "EM to allow REDCap to look up users using OneDirectory(Elastic Cache)",
-  "documentation": "README.md",
-  "authors": [
-    {
-      "name": "Andrew Martin",
-      "email": "andy123@stanford.edu",
-      "institution": "Stanford University"
-    },
-    {
-      "name": "Ihab Zeedia",
-      "email": "ihab.zeedia@stanford.edu",
-      "institution": "Stanford University"
-    }
-  ],
-  "permissions": [
-    "redcap_data_entry_form_top",
-    "redcap_survey_page_top"
-  ],
-  "enable-every-page-hooks-on-system-pages": false,
-  "links": {
-    "project": [
-    ],
-    "control-center": [
-    ]
-  },
-  "no-auth-pages": [
-      "ajax/get_users"
-  ],
-  "project-settings": [
-    {
-      "key": "instance",
-      "name": "<b>Search Instance</b>",
-      "required": true,
-      "type": "sub_settings",
-      "repeatable": true,
-      "sub_settings": [
+    "name": "RedcapOneDirectoryLookup",
+    "namespace": "Stanford\\RedcapOneDirectoryLookup",
+    "description": "EM to allow REDCap to look up users using OneDirectory(Elastic Cache)",
+    "documentation": "README.md",
+    "framework-version": 16,
+    "authors": [
         {
-          "key": "alert-if-exist",
-          "name": "<b>Alert user if data already saved before update<br>",
-          "required": true,
-          "type": "checkbox"
+            "name": "Ihab Zeedia",
+            "email": "ihab.zeedia@stanford.edu",
+            "institution": "Stanford University"
         },
         {
-          "key": "search-field",
-          "name": "<b>Field used to lookup users<br>",
-          "required": true,
-          "type": "field-list"
-        },
-        {
-          "key": "attribute_instance",
-          "name": "<b>Attribute Instance Map</b>",
-          "required": true,
-          "type": "sub_settings",
-          "repeatable": true,
-          "sub_settings": [
-            {
-              "key": "one-directory-attribute",
-              "name": "<b>Select OneDirectory Attribute</b>",
-              "required": false,
-              "type": "dropdown",
-              "choices": [
-                {
-                  "name": "OneDirectoryId",
-                  "value": "OneDirectoryId"
-                },
-                {
-                  "name": "affiliate",
-                  "value": "affiliate"
-                },
-                {
-                  "name": "jobId",
-                  "value": "jobId"
-                },
-                {
-                  "name": "first_name",
-                  "value": "first_name"
-                },
-                {
-                  "name": "last_name",
-                  "value": "last_name"
-                },
-                {
-                  "name": "fullname",
-                  "value": "fullname"
-                },
-                {
-                  "name": "phone",
-                  "value": "phone"
-                },
-                {
-                  "name": "phone2",
-                  "value": "phone2"
-                },
-                {
-                  "name": "email",
-                  "value": "email"
-                },
-                {
-                  "name": "title",
-                  "value": "title"
-                },
-                {
-                  "name": "SUNet of SID",
-                  "value": "suid"
-                }
-              ]
-            },
-            {
-              "key": "mapped-field",
-              "name": "<b>Select Project field where to save the OneDirectory Attribute<br>",
-              "required": true,
-              "type": "field-list"
-            }
-          ]
+            "name": "Jordan Schultz",
+            "email": "jmschult@stanford.edu",
+            "institution": "Stanford University"
         }
-      ]
+    ],
+    "enable-every-page-hooks-on-system-pages": false,
+    "links": {
+        "project": [
+        ],
+        "control-center": [
+        ]
     },
-    {
-      "key": "enable-project-debug-logging",
-      "name": "<b>Enable Debug Logging</b><br><i>(optional)</i> Requires installation and configuration of emLogger",
-      "required": false,
-      "type": "checkbox"
+    "no-auth-pages": [
+        "ajax/get_users",
+        "ajax/get_user_photo"
+    ],
+    "project-settings": [
+        {
+            "key": "instance",
+            "name": "<b>Search Instance</b>",
+            "required": true,
+            "type": "sub_settings",
+            "repeatable": true,
+            "sub_settings": [
+                {
+                    "key": "alert-if-exist",
+                    "name": "<b>Alert user if data already saved before update<br>",
+                    "required": true,
+                    "type": "checkbox"
+                },
+                {
+                    "key": "search-field",
+                    "name": "<b>Field used to lookup users<br>",
+                    "required": true,
+                    "type": "field-list"
+                },
+                {
+                    "key": "attribute_instance",
+                    "name": "<b>Attribute Instance Map</b>",
+                    "required": true,
+                    "type": "sub_settings",
+                    "repeatable": true,
+                    "sub_settings": [
+                        {
+                            "key": "one-directory-attribute",
+                            "name": "<b>Select OneDirectory Attribute</b>",
+                            "required": false,
+                            "type": "dropdown",
+                            "choices": [
+                                {
+                                    "name": "OneDirectoryId (Deprecated backward compatibility)",
+                                    "value": "OneDirectoryId"
+                                },
+                                {
+                                    "name": "affiliate (Deprecated backward compatibility)",
+                                    "value": "affiliate"
+                                },
+                                {
+                                    "name": "jobId (Deprecated backward compatibility)",
+                                    "value": "jobId"
+                                },
+                                {
+                                    "name": "first_name (Deprecated backward compatibility)",
+                                    "value": "first_name"
+                                },
+                                {
+                                    "name": "last_name (Deprecated backward compatibility)",
+                                    "value": "last_name"
+                                },
+                                {
+                                    "name": "fullname (Deprecated backward compatibility)",
+                                    "value": "fullname"
+                                },
+                                {
+                                    "name": "phone (Deprecated backward compatibility)",
+                                    "value": "phone"
+                                },
+                                {
+                                    "name": "phone2 (Deprecated backward compatibility)",
+                                    "value": "phone2"
+                                },
+                                {
+                                    "name": "email (Deprecated backward compatibility)",
+                                    "value": "email"
+                                },
+                                {
+                                    "name": "title (Deprecated backward compatibility)",
+                                    "value": "title"
+                                },
+                                {
+                                    "name": "SUNet of SID (Deprecated backward compatibility)",
+                                    "value": "suid"
+                                },
+                                {
+                                    "name": "id",
+                                    "value": "id"
+                                },
+                                {
+                                    "name": "displayName",
+                                    "value": "displayName"
+                                },
+                                {
+                                    "name": "givenName",
+                                    "value": "givenName"
+                                },
+                                {
+                                    "name": "surname",
+                                    "value": "surname"
+                                },
+                                {
+                                    "name": "mail",
+                                    "value": "mail"
+                                },
+                                {
+                                    "name": "userPrincipalName",
+                                    "value": "userPrincipalName"
+                                },
+                                {
+                                    "name": "accountEnabled",
+                                    "value": "accountEnabled"
+                                },
+                                {
+                                    "name": "jobTitle",
+                                    "value": "jobTitle"
+                                },
+                                {
+                                    "name": "department",
+                                    "value": "department"
+                                },
+                                {
+                                    "name": "companyName",
+                                    "value": "companyName"
+                                },
+                                {
+                                    "name": "officeLocation",
+                                    "value": "officeLocation"
+                                },
+                                {
+                                    "name": "businessPhones",
+                                    "value": "businessPhones"
+                                },
+                                {
+                                    "name": "mobilePhone",
+                                    "value": "mobilePhone"
+                                },
+                                {
+                                    "name": "preferredLanguage",
+                                    "value": "preferredLanguage"
+                                },
+                                {
+                                    "name": "identities",
+                                    "value": "identities"
+                                },
+                                {
+                                    "name": "otherMails",
+                                    "value": "otherMails"
+                                },
+                                {
+                                    "name": "mailNickname",
+                                    "value": "mailNickname"
+                                },
+                                {
+                                    "name": "usageLocation",
+                                    "value": "usageLocation"
+                                },
+                                {
+                                    "name": "createdDateTime",
+                                    "value": "createdDateTime"
+                                },
+                                {
+                                    "name": "assignedLicenses",
+                                    "value": "assignedLicenses"
+                                },
+                                {
+                                    "name": "assignedPlans",
+                                    "value": "assignedPlans"
+                                },
+                                {
+                                    "name": "onPremisesExtensionAttributes",
+                                    "value": "onPremisesExtensionAttributes"
+                                },
+                                {
+                                    "name": "streetAddress",
+                                    "value": "streetAddress"
+                                },
+                                {
+                                    "name": "city",
+                                    "value": "city"
+                                },
+                                {
+                                    "name": "state",
+                                    "value": "state"
+                                },
+                                {
+                                    "name": "postalCode",
+                                    "value": "postalCode"
+                                },
+                                {
+                                    "name": "country",
+                                    "value": "country"
+                                },
+                                {
+                                    "name": "physicalDeliveryOfficeName",
+                                    "value": "physicalDeliveryOfficeName"
+                                },
+                                {
+                                    "name": "telephoneNumber",
+                                    "value": "telephoneNumber"
+                                },
+                                {
+                                    "name": "userType",
+                                    "value": "userType"
+                                },
+                                {
+                                    "name": "showInAddressList",
+                                    "value": "showInAddressList"
+                                },
+                                {
+                                    "name": "Manager ID",
+                                    "value": "manager.id"
+                                },
+                                {
+                                    "name": "Manager Display Name",
+                                    "value": "manager.displayName"
+                                },
+                                {
+                                    "name": "Manager Mail",
+                                    "value": "manager.mail"
+                                },
+                                {
+                                    "name": "Manager User Principal Name",
+                                    "value": "manager.userPrincipalName"
+                                }
+                            ]
+                        },
+                        {
+                            "key": "mapped-field",
+                            "name": "<b>Select Project field where to save the OneDirectory Attribute<br>",
+                            "required": true,
+                            "type": "field-list"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "key": "enable-project-debug-logging",
+            "name": "<b>Enable Debug Logging</b><br><i>(optional)</i> Requires installation and configuration of emLogger",
+            "required": false,
+            "type": "checkbox"
+        }
+    ],
+    "system-settings": [
+        {
+            "key": "onedirectory-url",
+            "name": "<b>URL to Onedirectory server:</b>",
+            "required": true,
+            "type": "text"
+        },
+        {
+            "key": "google-cloud-project-id",
+            "name": "<b>Google Project Id:</b> This will store MS Graph API credentials in Secret Manager. (e.g., my-gcp-project). Make sure you create the following SECRET in Secrets:<ol><li>MS_GRAPH_CLIENT_ID</li><li>MS_GRAPH_CLIENT_SECRET</li><li>MS_GRAPH_TENANT_ID</li></ol> ",
+            "required": true,
+            "type": "text"
+        },
+        {
+            "key": "enable-system-debug-logging",
+            "name": "<b>Enable Debug Logging (system-wide)</b><i>(optional)</i> Requires installation and configuration of emLogger",
+            "required": false,
+            "type": "checkbox"
+        }
+    ],
+    "compatibility": {
+        "php-version-min": "",
+        "php-version-max": "",
+        "redcap-version-min": "",
+        "redcap-version-max": ""
     }
-  ],
-  "system-settings": [
-    {
-      "key": "onedirectory-url",
-      "name": "<b>URL to Onedirectory server:</b>",
-      "required": true,
-      "type": "text"
-    },
-    {
-      "key": "enable-system-debug-logging",
-      "name": "<b>Enable Debug Logging (system-wide)</b><i>(optional)</i> Requires installation and configuration of emLogger",
-      "required": false,
-      "type": "checkbox"
-    }
-  ],
-  "compatibility": {
-    "php-version-min": "",
-    "php-version-max": "",
-    "redcap-version-min": "",
-    "redcap-version-max": ""
-  }
 }

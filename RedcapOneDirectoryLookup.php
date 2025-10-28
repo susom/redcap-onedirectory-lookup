@@ -1,8 +1,12 @@
 <?php
 namespace Stanford\RedcapOneDirectoryLookup;
 
+require_once "vendor/autoload.php";
+require_once "classes/GoogleSecretManager.php";
+require_once "classes/MSGraphClient.php";
 require_once "emLoggerTrait.php";
 
+use Google\ApiCore\ApiException;
 use GuzzleHttp\Client;
 
 # trigger build
@@ -16,12 +20,14 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
 {
     use emLoggerTrait;
 
+    private $secretManager;
     private $fieldsMap;
 
     private $client;
 
     private $serverURL = '';
 
+    private $msGraphClient;
 
     public function __construct()
     {
@@ -43,75 +49,19 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
     }
 
 
-
-
-
     /**
      * Perform a OneDirectory Search
      * @param $term
      * @return array
      * @throws \GuzzleHttp\Exception\GuzzleException
+     * @throws ApiException
      */
-    public function searchUsers($term)
+    public function searchUsers($term, $nextPage)
     {
         // Build search object
-        $headers = [
-          'Content-Type' => 'application/json'
-        ];
-        $body = '{
-          "query": {
-            "multi_match": {
-              "query": "'.$term.'",
-              "analyzer": "standard"
-            }
-          }
-        }';
-
-        // Tried other searches but wouldn't return sunet lookup or email lookups.  I think
-        // those fields don't have indexing configured so it can't do much
-
-        // $search->query->multi_match->term   = "most_fields";
-        // $search->query->multi_match->fields = [ "first_name", "last_name", "fullname", "email", "affiliate", "title", "suid" ];
-
-        // Do a search
-        $q = $this->getClient()->post($this->getServerURL(), [
-            'body' => $body,
-            'headers' => $headers,
-        ]);
-
-        $result = $q->getBody()->getContents();
-        return $this->processOneDirectoryResponse($result);
+        return $this->getMSGraphClient()->searchUsers($term, $nextPage);
     }
 
-
-    /**
-     *
-     */
-    private function processOneDirectoryResponse($response)
-    {
-        $response = json_decode($response);
-        $result = array();
-        if ($response->hits->total > 0) {
-            foreach ($response->hits->hits as $item) {
-                if ($item->_source->affiliate == "Stanford University") {
-                    $image = $this->getUrl('assets/images/stanford_university.png', true, true);
-                } else {
-                    $image = $this->getUrl('assets/images/stanford_medicine.png', true, true);;
-                }
-
-                $result[] = array(
-                    'id'    => $item->_id,
-                    'label' => $item->_source->fullname,
-                    'title' => $item->_source->title,
-                    'suid'  => $item->_source->suid,
-                    'value' => $item->_source->fullname,
-                    'array' => $item->_source,
-                    'image' => $image
-                );
-            }
-        }
-        return $result;
-    }
 
 
     /**
@@ -220,5 +170,22 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
         $this->serverURL = $serverURL;
     }
 
+    private function getSecretManager(): GoogleSecretManager
+    {
+        if (!$this->secretManager) {
+            $this->secretManager = new GoogleSecretManager(
+                $this->getSystemSetting('google-cloud-project-id'),
+                ''
+            );
+        }
+        return $this->secretManager;
+    }
 
+    public function getMSGraphClient(): MSGraphClient
+    {
+        if (!$this->msGraphClient) {
+            $this->msGraphClient = new MSGraphClient($this->getSecretManager(), $this);
+        }
+        return $this->msGraphClient;
+    }
 }
