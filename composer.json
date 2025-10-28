@@ -1,6 +1,6 @@
 {
     "require": {
-        "google/cloud-secret-manager": "^2.2",
+        "google/cloud-secret-manager": "2.1",
         "microsoft/microsoft-graph": "^2.49"
     },
     "config": {

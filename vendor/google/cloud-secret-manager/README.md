@@ -31,26 +31,29 @@ on authenticating your client. Once authenticated, you'll be ready to start maki
 ### Sample
 
 ```php
-use Google\ApiCore\ApiException;
-use Google\Cloud\SecretManager\V1\Client\SecretManagerServiceClient;
-use Google\Cloud\SecretManager\V1\GetSecretRequest;
+require 'vendor/autoload.php';
+
+use Google\Cloud\SecretManager\V1\Replication;
+use Google\Cloud\SecretManager\V1\Replication\Automatic;
 use Google\Cloud\SecretManager\V1\Secret;
+use Google\Cloud\SecretManager\V1\SecretManagerServiceClient;
 
-// Create a client.
-$secretManagerServiceClient = new SecretManagerServiceClient();
+$client = new SecretManagerServiceClient();
 
-// Prepare the request message.
-$request = (new GetSecretRequest())
-    ->setName($formattedName);
+$secret = $client->createSecret(
+    SecretManagerServiceClient::projectName('[MY_PROJECT_ID]'),
+    '[MY_SECRET_ID]',
+    new Secret([
+        'replication' => new Replication([
+            'automatic' => new Automatic()
+        ])
+    ])
+);
 
-// Call the API and handle any network failures.
-try {
-    /** @var Secret $response */
-    $response = $secretManagerServiceClient->getSecret($request);
-    printf('Response data: %s' . PHP_EOL, $response->serializeToJsonString());
-} catch (ApiException $ex) {
-    printf('Call failed with message: %s' . PHP_EOL, $ex->getMessage());
-}
+printf(
+    'Created secret: %s' . PHP_EOL,
+    $secret->getName()
+);
 ```
 
 ### Debugging

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "ba3c27d2712e35cf1906c0ed11223af1",
+    "content-hash": "99aab960f2a61323d17df34027f04cda",
     "packages": [
         {
             "name": "brick/math",
@@ -423,21 +423,21 @@
         },
         {
             "name": "google/cloud-secret-manager",
-            "version": "v2.2.1",
+            "version": "v2.1.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/googleapis/google-cloud-php-secret-manager.git",
-                "reference": "b90706bc29480f59f0b906ad5014cd7aa2394676"
+                "reference": "926ad033990961320838c8f86aee627ec22c9814"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/googleapis/google-cloud-php-secret-manager/zipball/b90706bc29480f59f0b906ad5014cd7aa2394676",
-                "reference": "b90706bc29480f59f0b906ad5014cd7aa2394676",
+                "url": "https://api.github.com/repos/googleapis/google-cloud-php-secret-manager/zipball/926ad033990961320838c8f86aee627ec22c9814",
+                "reference": "926ad033990961320838c8f86aee627ec22c9814",
                 "shasum": ""
             },
             "require": {
-                "google/gax": "^1.38.0",
-                "php": "^8.1"
+                "google/gax": "^1.36.0",
+                "php": "^8.0"
             },
             "require-dev": {
                 "phpunit/phpunit": "^9.0"
@@ -468,9 +468,9 @@
             ],
             "description": "Secret Manager Client for PHP",
             "support": {
-                "source": "https://github.com/googleapis/google-cloud-php-secret-manager/tree/v2.2.1"
+                "source": "https://github.com/googleapis/google-cloud-php-secret-manager/tree/v2.1.0"
             },
-            "time": "2025-10-07T18:41:09+00:00"
+            "time": "2025-06-06T23:14:14+00:00"
         },
         {
             "name": "google/common-protos",
