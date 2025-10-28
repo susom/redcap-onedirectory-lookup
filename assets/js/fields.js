@@ -128,6 +128,12 @@ Fields = {
             // item is one entry from preview (URL image expected, not base64)
             var intendedSrc = item.image || Fields.image || '';
 
+            // If the backend photo endpoint supports companyName, append it
+            var companyName = (item && item.array && item.array.companyName) || item.companyName || '';
+            if (intendedSrc && companyName) {
+                intendedSrc = Fields.addQueryParam(intendedSrc, 'companyName', companyName);
+            }
+
             // Thumbnail container with fixed size to avoid layout shifts
             var $thumb = $('<div>')
                 .css({ width: '32px', height: '32px', position: 'relative', marginRight: '8px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' });
@@ -230,6 +236,18 @@ Fields = {
             return prefer ? String(prefer) : JSON.stringify(val);
         }
         return String(val);
+    },
+
+    // Helper: append a query parameter to a URL safely
+    addQueryParam: function (url, key, value) {
+        try {
+            if (!url || !key || value == null) return url;
+            var hasQ = url.indexOf('?') !== -1;
+            var sep = hasQ ? '&' : '?';
+            return url + sep + encodeURIComponent(key) + '=' + encodeURIComponent(String(value));
+        } catch (e) {
+            return url; // on any parsing error, return original URL
+        }
     },
 
     fillInformation: function () {
