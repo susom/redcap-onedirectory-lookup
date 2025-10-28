@@ -39,13 +39,6 @@ try {
     echo $bytes;
 } catch (\Throwable $e) {
     // No photo or no permission
-    if ($company == "Stanford University") {
-        $image = $module->getUrl('assets/images/stanford_university.png', true, true);
-    } else {
-        $image = $module->getUrl('assets/images/stanford_medicine.png', true, true);
-    }
-    $imageContent = @file_get_contents($image);
-    header('Content-Type: image/jpeg');
-    header('Cache-Control: private, max-age=300');
-    echo $imageContent;
+    http_response_code(404);
+    echo $e->getMessage();
 }
