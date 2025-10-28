@@ -7,14 +7,23 @@ use Google\Cloud\SecretManager\V1\AccessSecretVersionRequest;
 class GoogleSecretManager {
     private $client;
     private $projectId;
+    private $keyJson;
 
-    public function __construct(string $projectId ) {
+    public function __construct(string $projectId, ?string $keyJson = null) {
         $this->projectId = $projectId;
+        $this->keyJson = $keyJson;
     }
 
     private function getClient(): SecretManagerServiceClient {
         if (!$this->client) {
-            $this->client = new SecretManagerServiceClient();
+            if ($this->keyJson != null) {
+                $this->client = new SecretManagerServiceClient([
+                    'credentialsConfig' => ['keyFile' => json_decode($this->keyJson, true)]
+                ]);
+            } else {
+                 // Use default credentials
+                $this->client = new SecretManagerServiceClient();
+            }
         }
         return $this->client;
     }

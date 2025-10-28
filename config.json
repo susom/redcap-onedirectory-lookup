@@ -277,6 +277,12 @@
             "type": "text"
         },
         {
+            "key": "google-cloud-service-account-key",
+            "name": "<b>Google Service Account JSON:</b>",
+            "required": false,
+            "type": "textarea"
+        },
+        {
             "key": "enable-system-debug-logging",
             "name": "<b>Enable Debug Logging (system-wide)</b><i>(optional)</i> Requires installation and configuration of emLogger",
             "required": false,
