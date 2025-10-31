@@ -14,27 +14,82 @@ use Microsoft\Kiota\Abstractions\RequestInformation;
 use Microsoft\Kiota\Abstractions\HttpMethod;
 use Microsoft\Graph\Generated\Models\UserCollectionResponse;
 
-// Test commit.
+/**
+ * Microsoft Graph client helper for app-only lookups and user search.
+ *
+ * This class wraps the Microsoft Graph PHP SDK (Kiota) and provides:
+ * - Initialization via client credentials loaded from Google Secret Manager.
+ * - User search with robust `$select` defaults and `$expand=manager`.
+ * - Transparent handling of Graph pagination using `@odata.nextLink`.
+ * - Lightweight user normalization for UI consumption (preview cards).
+ *
+ * Typical usage:
+ * ```php
+ * $graph = (new MSGraphClient($gsm, $module))->getGraphClient();
+ * $results = $ms->searchUsers('jdoe');
+ * ```
+ *
+ * Environment / Secrets (stored in Google Secret Manager):
+ * - MS_GRAPH_TENANT_ID
+ * - MS_GRAPH_CLIENT_ID
+ * - MS_GRAPH_CLIENT_SECRET
+ *
+ * @package Stanford\RedcapOneDirectoryLookup
+ */
 class MSGraphClient
 {
     const MS_GRAPH_CLIENT_ID = 'MS_GRAPH_CLIENT_ID';
     const MS_GRAPH_TENANT_ID = 'MS_GRAPH_TENANT_ID';
     const MS_GRAPH_CLIENT_SECRET = 'MS_GRAPH_CLIENT_SECRET';
+    /**
+     * Google Secret Manager wrapper used to retrieve Graph app credentials.
+     *
+     * @var GoogleSecretManager
+     */
     private $secretManager;
 
+    /**
+     * Lazily-initialized GraphServiceClient instance.
+     *
+     * @var GraphServiceClient|null
+     */
     private $client;
 
+    /**
+     * Array of user attributes to include in `$select`.
+     *
+     * @var string[]
+     */
     private $attributes;
 
+    /**
+     * Cached URL (string) for Stanford University default avatar.
+     *
+     * @var string|null
+     */
     private $SUImage;
 
+    /**
+     * Cached URL (string) for Stanford Medicine default avatar.
+     *
+     * @var string|null
+     */
     private $SoMImage;
-    /** Cached app-only Graph access token and its expiry (epoch seconds) */
+    /**
+     * Cached app-only Graph access token and its expiry (epoch seconds).
+     *
+     * Token is refreshed when within a safety window of 60 seconds before expiry.
+     *
+     * @var string|null $accessToken
+     * @var int $accessTokenExpiresAt
+     */
     private ?string $accessToken = null;
     private int $accessTokenExpiresAt = 0;
     /**
-     * Default attributes to $select for users queries.
-     * Note: Navigation property `manager` is handled via $expand and not included here.
+     * Default projection for user objects returned from Graph.
+     * You may override by passing `$attributes` to the constructor.
+     *
+     * @var string[]
      */
     private const DEFAULT_ATTRIBUTES = [
         'id','displayName','givenName','surname','mail','userPrincipalName','accountEnabled',
@@ -43,8 +98,18 @@ class MSGraphClient
         'assignedLicenses','assignedPlans','onPremisesExtensionAttributes','streetAddress','city','state',
         'postalCode','country','physicalDeliveryOfficeName','telephoneNumber','userType','showInAddressList'
     ];
-
+    /**
+     * Reference to the REDCap External Module instance for URL generation, etc.
+     *
+     * @var mixed
+     */
     private $module;
+
+    /**
+     * @param GoogleSecretManager $secretManager Secret source for Graph app credentials.
+     * @param mixed               $module        REDCap EM instance used to build asset URLs.
+     * @param string[]            $attributes    Optional override for `$select` attributes.
+     */
     public function __construct(GoogleSecretManager $secretManager, $module, $attributes = [])
     {
         $this->module = $module;
@@ -55,7 +120,13 @@ class MSGraphClient
     }
 
     /**
-     * @throws ApiException
+     * Initialize (once) and return the Microsoft Graph client using client credentials.
+     *
+     * Credentials are loaded from Google Secret Manager using keys:
+     * MS_GRAPH_TENANT_ID, MS_GRAPH_CLIENT_ID, MS_GRAPH_CLIENT_SECRET.
+     *
+     * @return GraphServiceClient
+     * @throws ApiException On errors from underlying SDK calls.
      */
     public function getGraphClient(): GraphServiceClient
     {
@@ -70,6 +141,12 @@ class MSGraphClient
         return $this->client;
     }
 
+    /**
+     * Build UsersRequestBuilder query parameters with `$select`, `$expand`, and paging.
+     *
+     * @param string $filter OData filter expression.
+     * @return UsersRequestBuilderGetQueryParameters
+     */
     private function getQueryParams($filter)
     {
         return new UsersRequestBuilderGetQueryParameters(
@@ -82,10 +159,12 @@ class MSGraphClient
     }
 
     /**
-     * Build OData filter for user search.
+     * Build a safe OData filter that searches across UPN, mailNickname, mail, givenName, and surname.
+     *
+     * Single quotes inside the search term are escaped per OData (`''`).
      *
      * @param string $searchTerm
-     * @return string
+     * @return string OData filter expression.
      */
     private function buildSearchFilter(string $searchTerm): string
     {
@@ -103,10 +182,11 @@ class MSGraphClient
     }
 
     /**
-     * Convenience method: search by term across UPN, mailNickname, and mail.
+     * Search users by term and return a normalized payload including `users`, `preview`, and paging links.
      *
-     * @param string $searchTerm
-     * @return array{count:int|null, users:array}
+     * @param string      $searchTerm Term to search (prefix match via startsWith).
+     * @param string|null $nextLink   Optional absolute `@odata.nextLink` for subsequent pages.
+     * @return array{count:int|null, users:array, preview:array, nextLink:?string, prevLink:?string, @odata.nextLink:?string}
      * @throws ApiException
      * @throws \Exception
      * @throws \Throwable
@@ -119,6 +199,14 @@ class MSGraphClient
 
 
     /**
+     * Execute a users query given an explicit OData filter and optional nextLink for pagination.
+     *
+     * If `$nextLink` is provided, a raw RequestInformation with the absolute URL is used to bypass
+     * SDK pagination gaps (e.g., missing skiptoken support in some versions).
+     *
+     * @param string      $filter   OData filter expression.
+     * @param string|null $nextLink Absolute `@odata.nextLink` from a previous response (optional).
+     * @return array{count:int|null, users:array, preview:array, nextLink:?string, prevLink:?string, @odata.nextLink:?string}
      * @throws ApiException
      * @throws \Exception
      * @throws \Throwable
@@ -304,6 +392,15 @@ class MSGraphClient
         ];
     }
 
+    /**
+     * Create compact preview cards array for the UI, picking the correct default image.
+     *
+     * If a user does not have a profile photo, defaults to Stanford University or
+     * Stanford Medicine image based on companyName.
+     *
+     * @param array $users Normalized users array from getUsersByFilter().
+     * @return array
+     */
     private function createUserPreview($users)
     {
 
@@ -335,6 +432,11 @@ class MSGraphClient
         return $result;
     }
 
+    /**
+     * Get (and cache) the Stanford University default avatar URL.
+     *
+     * @return string
+     */
     private function getSUImage()
     {
         if(!$this->SUImage) {
@@ -343,6 +445,11 @@ class MSGraphClient
         return $this->SUImage;
     }
 
+    /**
+     * Get (and cache) the Stanford Medicine default avatar URL.
+     *
+     * @return string
+     */
     private function getSoMImage()
     {
         if(!$this->SoMImage) {
@@ -352,8 +459,13 @@ class MSGraphClient
         return $this->SoMImage;
     }
     /**
-     * Acquire an app-only access token for Microsoft Graph using client credentials.
-     * The token is cached until ~60 seconds before expiry.
+     * Acquire and cache an app-only access token for Microsoft Graph via OAuth2 client credentials.
+     *
+     * The token is fetched from `https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token`
+     * with scope `https://graph.microsoft.com/.default`, cached in-memory, and reused until
+     * 60 seconds before expiration.
+     *
+     * @return string|null Bearer access token, or null if retrieval fails.
      */
     public function getAccessToken(): ?string
     {
