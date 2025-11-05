@@ -1,7 +1,7 @@
 {
-    "name": "RedcapOneDirectoryLookup",
+    "name": "Microsoft Graph API Lookup (Previously OneDirectory)",
     "namespace": "Stanford\\RedcapOneDirectoryLookup",
-    "description": "EM to allow REDCap to look up users using OneDirectory(Elastic Cache)",
+    "description": "A REDCap module that looks up user information from Microsoft Graph API and populates REDCap project fields based on configured mappings. OneDirectory Elastic search is decommissioned and replaced by Microsoft Graph API.",
     "documentation": "README.md",
     "framework-version": 16,
     "authors": [
