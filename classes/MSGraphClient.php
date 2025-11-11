@@ -154,7 +154,7 @@ class MSGraphClient
             filter: $filter,
             count: false,
             expand: ['manager($select=id,displayName,mail,userPrincipalName)'],
-            top: 20
+            top: 10
         );
     }
 

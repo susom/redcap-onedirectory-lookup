@@ -316,7 +316,4 @@ Fields = {
         return false;
     }
 }
-//run function once load is complete.
-window.onload = function () {
-    Fields.init();
-}
+

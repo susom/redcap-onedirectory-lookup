@@ -5,11 +5,12 @@ namespace Stanford\RedcapOneDirectoryLookup;
 /** @var \Stanford\RedcapOneDirectoryLookup\RedcapOneDirectoryLookup $this */
 
 ?>
+<link rel="preload" as="image" href="<?php echo $this->getUrl('assets/images/stanford_university.png', true, true) ?>">
+<link rel="preload" as="image" href="<?php echo $this->getUrl('assets/images/stanford_medicine.png', true, true) ?>">
 <style>
     .ui-autocomplete-loading {
         background: url('<?php echo $this->getUrl("assets/images/progress_circle.gif", true, true) ?>') no-repeat right center;
         background-size: 20px 20px;
-        progress_circle . gif
     }
 
     .ui-autocomplete-input {
@@ -50,5 +51,9 @@ namespace Stanford\RedcapOneDirectoryLookup;
     Fields.SoMImage = '<?php echo $this->getUrl('assets/images/stanford_medicine.png', true, true) ?>';
     Fields.ajaxUrl = '<?php echo $this->getUrl("ajax/get_users.php", true, true) ?>';
     Fields.image = '<?php echo $this->getUrl("assets/images/magnifier.png", true, true) ?>';
-    Fields.list = <?php echo json_encode($this->getFieldsMap()) ?>
+    Fields.list = <?php echo json_encode($this->getFieldsMap()) ?>;
+//run function once load is complete.
+        window.onload = function () {
+            Fields.init();
+        }
 </script>
