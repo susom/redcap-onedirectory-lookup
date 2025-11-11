@@ -7,8 +7,10 @@ Fields = {
     cancel: false,
     SuImage: '',
     SoMImage: '',
+    _imgCache: {}, // cache for preloaded images (brand + profiles)
     _acState: {}, // per-input autocomplete pagination state
     init: function () {
+        Fields.preloadBrandImages();
         Fields.searchPage();
     },
     searchPage: function () {
@@ -132,32 +134,33 @@ Fields = {
             if (intendedSrc && companyName) {
                 intendedSrc = Fields.addQueryParam(intendedSrc, 'companyName', companyName);
             }
-            // Choose default image based on company
-            var defaultImg = (companyName === 'Stanford University') ? (Fields.SuImage || Fields.SoMImage || Fields.image || '')
-                                                                    : (Fields.SoMImage || Fields.SuImage || Fields.image || '');
+            // Choose default image based on company and prefer preloaded cache
+            var defaultKey = (companyName === 'Stanford University') ? 'SuImage' : 'SoMImage';
+            var defaultUrl = Fields[defaultKey] || Fields.image || '';
+            var cachedDefault = Fields._imgCache[defaultKey];
 
             // Thumbnail container with fixed size to avoid layout shifts
             var $thumb = $('<div>')
                 .css({ width: '24px', height: '32px', position: 'relative', marginRight: '8px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' });
 
-            // Start with default image visible
+            // Start with default image visible (use cached src if available)
             var $img = $('<img>')
                 .attr('alt', 'user')
-                .attr('src', defaultImg)
+                .attr('src', cachedDefault ? cachedDefault.src : defaultUrl)
                 .css({ width: '32px', height: '32px', display: 'block' });
 
             $thumb.append($img);
 
-            // Preload actual profile image from backend, then swap in
+            // Preload actual profile image from backend (and cache by URL), then swap in
             if (intendedSrc) {
-                var preload = new Image();
-                preload.onload = function () {
-                    $img.attr('src', intendedSrc);
-                };
-                preload.onerror = function () {
-                    // keep default image if load fails
-                };
-                preload.src = intendedSrc;
+                if (Fields._imgCache[intendedSrc]) {
+                    // already cached, swap immediately
+                    $img.attr('src', Fields._imgCache[intendedSrc].src);
+                } else {
+                    Fields.preloadUrl(intendedSrc, function () {
+                        $img.attr('src', intendedSrc);
+                    });
+                }
             }
 
             var $li = $("<li>")
@@ -240,6 +243,41 @@ Fields = {
         } catch (e) {
             return url; // on any parsing error, return original URL
         }
+    },
+
+    // Preload the default Stanford brand images (SU / SoM) into cache
+    preloadBrandImages: function () {
+        try {
+            ['SuImage', 'SoMImage'].forEach(function (key) {
+                var url = Fields[key];
+                if (typeof url === 'string' && url.length > 0) {
+                    var img = new Image();
+                    img.src = url;
+                    Fields._imgCache[key] = img; // keep a reference to prevent GC
+                }
+            });
+        } catch (e) {
+            // no-op
+        }
+    },
+
+    // Preload any arbitrary URL and memoize it in _imgCache by URL string
+    preloadUrl: function (url, onload) {
+        if (!url || typeof url !== 'string') return null;
+        if (Fields._imgCache[url]) {
+            if (typeof onload === 'function') onload(Fields._imgCache[url]);
+            return Fields._imgCache[url];
+        }
+        var img = new Image();
+        img.onload = function () {
+            Fields._imgCache[url] = img;
+            if (typeof onload === 'function') onload(img);
+        };
+        img.onerror = function () {
+            // leave uncached on error
+        };
+        img.src = url;
+        return img;
     },
 
     fillInformation: function () {
