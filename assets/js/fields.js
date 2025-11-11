@@ -9,9 +9,62 @@ Fields = {
     SoMImage: '',
     _imgCache: {}, // cache for preloaded images (brand + profiles)
     _acState: {}, // per-input autocomplete pagination state
-    init: function () {
+    init: async function () {
+        try {
+            // Persist brand logos as data URLs in localStorage to bypass server no-store headers
+            if (Fields.SuImage && Fields.SoMImage && window.fetch) {
+                await Fields.persistBrandImages();
+            }
+        } catch (e) {
+            // Ignore persistence errors and continue with normal preload
+        }
         Fields.preloadBrandImages();
         Fields.searchPage();
+    },
+    // Persist SU/SoM logos to localStorage as data URLs so they survive across page loads
+    persistBrandImages: async function () {
+        // Bump these version keys when you change the actual image file to invalidate cache
+        var suKey = 'logo_su_v1';
+        var somKey = 'logo_som_v1';
+
+        // Helper: fetch a URL and convert to data URL
+        async function toDataUrl(url) {
+            // Use same-origin credentials; cache:'no-store' ensures we get the bytes even if HTTP caching is disabled
+            var resp = await fetch(url, { credentials: 'same-origin', cache: 'no-store' });
+            if (!resp.ok) throw new Error('Failed to fetch image: ' + url);
+            var blob = await resp.blob();
+            return await new Promise(function (resolve, reject) {
+                var fr = new FileReader();
+                fr.onload = function () { resolve(fr.result); };   // data:image/...;base64,....
+                fr.onerror = reject;
+                fr.readAsDataURL(blob);
+            });
+        }
+
+        try {
+            // Guard against environments without localStorage
+            if (!window.localStorage) throw new Error('no localStorage');
+
+            var suData = localStorage.getItem(suKey);
+            if (!suData && Fields.SuImage) {
+                suData = await toDataUrl(Fields.SuImage);
+                localStorage.setItem(suKey, suData);
+            }
+            if (suData) {
+                Fields.SuImage = suData; // replace URL with data URL
+            }
+
+            var somData = localStorage.getItem(somKey);
+            if (!somData && Fields.SoMImage) {
+                somData = await toDataUrl(Fields.SoMImage);
+                localStorage.setItem(somKey, somData);
+            }
+            if (somData) {
+                Fields.SoMImage = somData; // replace URL with data URL
+            }
+        } catch (e) {
+            // If persistence fails, leave Fields.SuImage/SoMImage as normal URLs
+        }
     },
     searchPage: function () {
         var l = Fields.list
