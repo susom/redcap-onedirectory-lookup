@@ -138,7 +138,7 @@ Fields = {
 
             // Thumbnail container with fixed size to avoid layout shifts
             var $thumb = $('<div>')
-                .css({ width: '32px', height: '32px', position: 'relative', marginRight: '8px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' });
+                .css({ width: '24px', height: '32px', position: 'relative', marginRight: '8px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' });
 
             // Start with default image visible
             var $img = $('<img>')
