@@ -277,6 +277,24 @@
             "type": "text"
         },
         {
+            "key": "microsoft-azure-tenant-id",
+            "name": "<b>Microsoft Azure Tenant ID:</b>",
+            "required": true,
+            "type": "text"
+        },
+        {
+            "key": "microsoft-azure-client-id",
+            "name": "<b>Microsoft Azure Client ID:</b>",
+            "required": true,
+            "type": "text"
+        },
+        {
+            "key": "microsoft-azure-client-secret",
+            "name": "<b>Microsoft Azure Client Secret:</b>",
+            "required": true,
+            "type": "text"
+        },
+        {
             "key": "google-cloud-service-account-key",
             "name": "<b>Google Service Account JSON:</b>",
             "required": false,

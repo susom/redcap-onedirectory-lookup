@@ -2,11 +2,9 @@
 namespace Stanford\RedcapOneDirectoryLookup;
 
 require_once "vendor/autoload.php";
-require_once "classes/GoogleSecretManager.php";
 require_once "classes/MSGraphClient.php";
 require_once "emLoggerTrait.php";
 
-use Google\ApiCore\ApiException;
 use GuzzleHttp\Client;
 
 # trigger build
@@ -17,7 +15,6 @@ use GuzzleHttp\Client;
  * selected attributes back to REDCap fields based on per‑project configuration.
  *
  * Responsibilities:
- * - Reads Google Secret Manager for Graph client credentials.
  * - Instantiates a reusable MSGraphClient for user search and preview cards.
  * - Processes EM sub‑settings to build a field mapping used by the client UI.
  * - Injects the lookup UI on Data Entry Form and Survey pages.
@@ -34,13 +31,6 @@ use GuzzleHttp\Client;
 class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
 {
     use emLoggerTrait;
-
-    /**
-     * Lazy-initialized Google Secret Manager wrapper.
-     *
-     * @var GoogleSecretManager|null
-     */
-    private $secretManager;
 
     /**
      * Per-instance mapping of OneDirectory attributes to REDCap destination fields.
@@ -253,21 +243,6 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
         $this->serverURL = $serverURL;
     }
 
-    /**
-     * Lazily create (and cache) the Google Secret Manager helper using system settings.
-     *
-     * @return GoogleSecretManager
-     */
-    private function getSecretManager(): GoogleSecretManager
-    {
-        if (!$this->secretManager) {
-            $this->secretManager = new GoogleSecretManager(
-                $this->getSystemSetting('google-cloud-project-id'),
-                $this->getSystemSetting('google-cloud-service-account-key')
-            );
-        }
-        return $this->secretManager;
-    }
 
     /**
      * Lazily create (and cache) the Microsoft Graph client helper.
@@ -277,7 +252,7 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
     public function getMSGraphClient(): MSGraphClient
     {
         if (!$this->msGraphClient) {
-            $this->msGraphClient = new MSGraphClient($this->getSecretManager(), $this);
+            $this->msGraphClient = new MSGraphClient($this->getSystemSetting('microsoft-azure-tenant-id'), $this->getSystemSetting('microsoft-azure-client-id'), $this->getSystemSetting('microsoft-azure-client-secret'), $this);
         }
         return $this->msGraphClient;
     }

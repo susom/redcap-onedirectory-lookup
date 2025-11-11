@@ -41,12 +41,7 @@ class MSGraphClient
     const MS_GRAPH_CLIENT_ID = 'MS_GRAPH_CLIENT_ID';
     const MS_GRAPH_TENANT_ID = 'MS_GRAPH_TENANT_ID';
     const MS_GRAPH_CLIENT_SECRET = 'MS_GRAPH_CLIENT_SECRET';
-    /**
-     * Google Secret Manager wrapper used to retrieve Graph app credentials.
-     *
-     * @var GoogleSecretManager
-     */
-    private $secretManager;
+
 
     /**
      * Lazily-initialized GraphServiceClient instance.
@@ -54,6 +49,10 @@ class MSGraphClient
      * @var GraphServiceClient|null
      */
     private $client;
+
+    private $tenantId;
+    private $clientId;
+    private $clientSecret;
 
     /**
      * Array of user attributes to include in `$select`.
@@ -106,14 +105,15 @@ class MSGraphClient
     private $module;
 
     /**
-     * @param GoogleSecretManager $secretManager Secret source for Graph app credentials.
      * @param mixed               $module        REDCap EM instance used to build asset URLs.
      * @param string[]            $attributes    Optional override for `$select` attributes.
      */
-    public function __construct(GoogleSecretManager $secretManager, $module, $attributes = [])
+    public function __construct($tenantId, $clientId, $clientSecret, $module, $attributes = [])
     {
         $this->module = $module;
-        $this->secretManager = $secretManager;
+        $this->tenantId = $tenantId;
+        $this->clientId = $clientId;
+        $this->clientSecret = $clientSecret;
         $this->attributes = $attributes && is_array($attributes) && count($attributes) > 0
             ? array_values(array_unique(array_map('trim', $attributes)))
             : self::DEFAULT_ATTRIBUTES;
@@ -132,9 +132,9 @@ class MSGraphClient
     {
         if (!$this->client) {
             $tokenRequestContext = new ClientCredentialContext(
-                $this->secretManager->getSecret(self::MS_GRAPH_TENANT_ID),
-                $this->secretManager->getSecret(self::MS_GRAPH_CLIENT_ID),
-                $this->secretManager->getSecret(self::MS_GRAPH_CLIENT_SECRET)
+                $this->tenantId,
+                $this->clientId,
+                $this->clientSecret,
             );
             $this->client = new GraphServiceClient($tokenRequestContext);
         }
@@ -240,7 +240,7 @@ class MSGraphClient
             $response = $graphClient->users()->get($requestConfig)->wait();
         }
 
-
+        $image = $this->module->getUrl('ajax/get_user_photo.php', true, true);
         $users = [];
         foreach ($response->getValue() as $user) {
             // Collections / complex types with safe normalization
@@ -365,7 +365,7 @@ class MSGraphClient
                 'principal' => $principal,
                 'alternativeSecurityIds' => $alternativeSecurityIds,
                 'IsSoftDeleted' => $isSoftDeleted,
-                'photoUrl' => $this->module->getUrl('ajax/get_user_photo.php', true, true) . '&user_id=' . urlencode($user->getId()) . '&size=120x120',
+                'photoUrl' => $image . '&user_id=' . urlencode($user->getId()) . '&size=120x120',
                 // backward compatibility with OneDirectory fields
                 'OneDirectoryId' => $user->getId(),
                 'affiliate' => $user->getCompanyName(),
@@ -475,9 +475,9 @@ class MSGraphClient
         }
 
         // Load credentials from Secret Manager
-        $tenantId = trim($this->secretManager->getSecret(self::MS_GRAPH_TENANT_ID));
-        $clientId = trim($this->secretManager->getSecret(self::MS_GRAPH_CLIENT_ID));
-        $clientSecret = $this->secretManager->getSecret(self::MS_GRAPH_CLIENT_SECRET);
+        $tenantId = trim($this->tenantId);
+        $clientId = trim($this->clientId);
+        $clientSecret = $this->clientSecret;
         if ($tenantId === '' || $clientId === '' || $clientSecret === '') {
             error_log('[MSGraphClient] Missing Graph app credentials (TENANT/CLIENT_ID/CLIENT_SECRET).');
             return null;
