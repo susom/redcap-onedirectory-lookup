@@ -206,8 +206,7 @@ Fields = {
                             Fields.fillInformation();
                         })
                         .fail(function () {
-                            // On failure, remove spinner and fall back to filling with the base user data only
-                            removeSpinner();
+
                             Fields.fillInformation();
                         });
                 } else {
@@ -439,6 +438,12 @@ Fields = {
 
     fillInformation: function () {
         var m = Fields.map;
+        // Clear all mapped fields before filling new values
+        for (var k in m) {
+            if (m.hasOwnProperty(k)) {
+                $('[name ="' + m[k] + '"]').val('');
+            }
+        }
 
         for (var key in m) {
             if (m.hasOwnProperty(key)) {
