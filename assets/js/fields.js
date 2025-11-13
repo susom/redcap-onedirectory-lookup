@@ -71,6 +71,46 @@ Fields = {
         for (i = 0; i < l.length; i++) {
             var name = Fields.list[i]['search-field'];
             if ($('input[name ="' + name + '"]').length) {
+                // -- Affiliation enforcement per-instance --
+                var enforce = Fields.list[i]['enforce-affiliation'];
+                var source  = Fields.list[i]['affiliation-enforcement-source'];
+                var emVal   = Fields.list[i]['affiliation-em-value'];
+                var surveyField = Fields.list[i]['affiliation-survey-field'];
+
+                // Initialize holder for per-instance companyName
+                Fields.list[i].companyName = Fields.list[i].companyName || '';
+
+                if (enforce === 'yes') {
+                    if (source === 'em' && emVal) {
+                        // Fixed company from EM settings
+                        Fields.list[i].companyName = emVal;
+                    } else if (source === 'survey' && surveyField) {
+                        // Attach listeners to survey field (dropdown or radio group).
+                        // For radio, REDCap-style name will be like [FIELD_NAME]___radio; for dropdown it's just [FIELD_NAME].
+                        (function (instIndex, fieldName) {
+                            var $els = $("select[name='" + fieldName + "'], input[type='radio'][name^='" + fieldName + "___']");
+                            if (!$els.length) return;
+
+                            var read = function () {
+                                var v = '';
+                                if ($els.length > 1) {
+                                    // Radio group: use checked value (expected to be 1,2,3 etc.)
+                                    var $checked = $els.filter(':checked');
+                                    if ($checked.length) v = $checked.first().val() || '';
+                                } else {
+                                    // Single dropdown or single input: take its value directly (1,2,3)
+                                    v = $els.val() || '';
+                                }
+                                // Pass the raw affiliation code to backend; it will map 1/2/3 -> label.
+                                Fields.list[instIndex].companyName = v;
+                            };
+
+                            $els.off('.affCompany').on('change.affCompany input.affCompany keyup.affCompany', read);
+                            // initial read
+                            read();
+                        })(i, surveyField);
+                    }
+                }
                 Fields.addInputToList(i, name);
                 Fields.makeInputAutoComplete(name);
                 $('input[name ="' + name + '"]').after('<div><img src="' + Fields.image + '" title="Search Users"  style="margin-bottom:1px;"></div><div class="space"></div>')
@@ -83,8 +123,14 @@ Fields = {
     makeInputAutoComplete: function (name) {
         $('input[name ="' + name + '"]').autocomplete({
             source: function (request, response) {
+                // Lookup per-instance companyName by search-field name
+                var inst = null;
+                for (var j = 0; j < Fields.list.length; j++) {
+                    if (Fields.list[j]['search-field'] === name) { inst = Fields.list[j]; break; }
+                }
+                var companyName = (inst && inst.companyName) || '';
                 var term = request.term;
-                $.getJSON(Fields.ajaxUrl, { term: term })
+                $.getJSON(Fields.ajaxUrl, { term: term, companyName: companyName })
                     .done(function (data) {
                         var items = [];
                         // Unwrap items
@@ -95,6 +141,15 @@ Fields = {
                         } else if (data && data.users && Array.isArray(data.users)) {
                             // Some APIs return users array directly
                             items = data.users;
+                        }
+
+                        // If no items were returned, show a non-selectable "No results" row
+                        if (!items || items.length === 0) {
+                            items = [{
+                                label: 'No results found',
+                                value: term,
+                                noResults: true
+                            }];
                         }
 
                         // Detect pagination tokens/links from common shapes
@@ -120,10 +175,45 @@ Fields = {
             },
             minLength: 2,
             select: function (event, ui) {
-                Fields.user = ui.item['array'] || ui.item; // prefer full object if provided
+                // Ignore the synthetic "no results" item
+                if (ui.item && ui.item.noResults) {
+                    event.preventDefault();
+                    return false;
+                }
+                // Normalize selected user object (backend may wrap full user in item.array)
+                Fields.user = ui.item['array'] || ui.item;
                 Fields.$input = $(event.target);
                 Fields.findSearchFieldMap(Fields.$input.attr('name'));
-                Fields.fillInformation();
+
+                var user = Fields.user;
+                // managerURL may come from the backend as part of the user payload
+                var managerUrl = user.managerURL || user.managerUrl || (user.array && (user.array.managerURL || user.array.managerUrl));
+
+
+                // If we have a manager URL, fetch manager info before filling fields
+                if (managerUrl) {
+
+                    $.getJSON(managerUrl)
+                        .done(function (data) {
+                            // Append returned manager data under `manager` on the same user object.
+                            // If backend wraps it as {manager: {...}} use that, otherwise use the payload as-is.
+                            if (data && data.manager) {
+                                user.manager = data.manager;
+                            } else {
+                                user.manager = data;
+                            }
+                            Fields.user = user;
+                            Fields.fillInformation();
+                        })
+                        .fail(function () {
+                            // On failure, remove spinner and fall back to filling with the base user data only
+                            removeSpinner();
+                            Fields.fillInformation();
+                        });
+                } else {
+                    // No managerURL defined; just fill mapped fields from the base user object
+                    Fields.fillInformation();
+                }
             }
         });
         // When menu opens, attach scroll-to-end pagination
@@ -167,8 +257,14 @@ Fields = {
 
                 // Always call backend with term + next_page (Graph next link or token)
                 var nextPageParam = state.nextLink || state.nextToken || null;
+                // Lookup per-instance companyName by search-field name
+                var instObj = null;
+                for (var j = 0; j < Fields.list.length; j++) {
+                    if (Fields.list[j]['search-field'] === name) { instObj = Fields.list[j]; break; }
+                }
+                var companyName = (instObj && instObj.companyName) || '';
                 if (nextPageParam) {
-                    $.getJSON(Fields.ajaxUrl, { term: state.term, next_page: nextPageParam })
+                    $.getJSON(Fields.ajaxUrl, { term: state.term, next_page: nextPageParam, companyName: companyName })
                         .done(appendItems)
                         .fail(function () { $loading.remove(); state.loading = false; state.hasMore = false; $('<li class="ui-autocomplete-no-more">No more users</li>').appendTo($ul); });
                 } else {
@@ -180,6 +276,14 @@ Fields = {
             });
         });
         $('input[name ="' + name + '"]').autocomplete("instance")._renderItem = function (ul, item) {
+            // Render a simple row for the synthetic "no results" item
+            if (item && item.noResults) {
+                var $liNo = $('<li>')
+                    .addClass('ui-autocomplete-no-results')
+                    .text(item.label || 'No results found')
+                    .css({ padding: '4px 8px', color: '#666' });
+                return $liNo.appendTo(ul);
+            }
             // item is one entry from preview (URL image expected, points to get_user_photo)
             var companyName = (item && item.array && item.array.companyName) || item.companyName || '';
             var intendedSrc = item.image || '';

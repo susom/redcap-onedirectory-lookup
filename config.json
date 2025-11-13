@@ -25,7 +25,8 @@
     },
     "no-auth-pages": [
         "ajax/get_users",
-        "ajax/get_user_photo"
+        "ajax/get_user_photo",
+        "ajax/get_user_manager"
     ],
     "project-settings": [
         {
@@ -46,6 +47,70 @@
                     "name": "<b>Field used to lookup users<br>",
                     "required": true,
                     "type": "field-list"
+                },
+                {
+                    "key": "enforce-affiliation",
+                    "name": "<b>Enforce Affiliation?</b>",
+                    "required": false,
+                    "type": "dropdown",
+                    "choices": [
+                        {
+                            "name": "Yes",
+                            "value": "yes"
+                        },
+                        {
+                            "name": "No",
+                            "value": "no"
+                        }
+                    ]
+                },
+                {
+                    "key": "affiliation-enforcement-source",
+                    "name": "<b>Affiliation Enforcement Source</b>",
+                    "required": true,
+                    "type": "dropdown",
+                    "choices": [
+                        {
+                            "name": "Stanford Affiliations",
+                            "value": "em"
+                        },
+                        {
+                            "name": "Survey fields",
+                            "value": "survey"
+                        }
+                    ],
+                    "branchingLogic": {
+                        "field": "enforce-affiliation",
+                        "value": "yes"
+                    }
+                },
+                {
+                    "key": "affiliation-em-value",
+                    "name": "<b>Affiliation EM Value</b>",
+                    "required": true,
+                    "type": "dropdown",
+                    "choices": [
+                        {
+                            "name": "Stanford Children''s Health",
+                            "value": "1"
+                        },
+                        {
+                            "name": "Stanford Health Care",
+                            "value": "2"
+                        },
+                        {
+                            "name": "Stanford University",
+                            "value": "3"
+                        }
+                    ],
+                    "branchingLogic": { "field": "affiliation-enforcement-source", "value": "em" }
+                },
+                {
+                    "key": "affiliation-survey-field",
+                    "name": "<b>Affiliation Survey Field</b><div class='alert alert-danger mt-2'><b>The survey field value (text, checkbox, or radio) must match one of the following exactly to allow user lookup:</b><ul><li>1, Stanford Children's Health</li><li>2, Stanford Health Care</li><li>3, Stanford University</li></ul><b>Otherwise, you will get empty results.</b></div>",
+                    "required": true,
+                    "type": "field-list",
+                    "branchingLogic": { "field": "affiliation-enforcement-source", "value": "survey" }
                 },
                 {
                     "key": "attribute_instance",

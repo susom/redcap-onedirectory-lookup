@@ -38,10 +38,11 @@ use Microsoft\Graph\Generated\Models\UserCollectionResponse;
  */
 class MSGraphClient
 {
-    const MS_GRAPH_CLIENT_ID = 'MS_GRAPH_CLIENT_ID';
-    const MS_GRAPH_TENANT_ID = 'MS_GRAPH_TENANT_ID';
-    const MS_GRAPH_CLIENT_SECRET = 'MS_GRAPH_CLIENT_SECRET';
-
+    private $companyNameMap = [
+        '1' => "Stanford Children's Health",
+        '2' => 'Stanford Health Care',
+        '3' => 'Stanford University',
+    ];
 
     /**
      * Lazily-initialized GraphServiceClient instance.
@@ -159,6 +160,25 @@ class MSGraphClient
     }
 
     /**
+     * Build UsersRequestBuilder query parameters for advanced filters (e.g., companyName) without $expand.
+     *
+     * Advanced directory queries require $count=true and ConsistencyLevel: eventual.
+     *
+     * @param string $filter OData filter expression.
+     * @return UsersRequestBuilderGetQueryParameters
+     */
+    private function getAdvancedQueryParams(?string $search, ?string $filter)
+    {
+        return new UsersRequestBuilderGetQueryParameters(
+            select: $this->attributes,
+            search: $search,
+            filter: $filter,
+            count: true,
+            top: 10
+        );
+    }
+
+    /**
      * Build a safe OData filter that searches across UPN, mailNickname, mail, givenName, and surname.
      *
      * Single quotes inside the search term are escaped per OData (`''`).
@@ -168,11 +188,16 @@ class MSGraphClient
      */
     private function buildSearchFilter(string $searchTerm): string
     {
-        // Escape single quotes by doubling them per OData rules
-        $escaped = str_replace("'", "''", trim($searchTerm));
+        // Build Graph $search query string across key properties.
+        // Quotes inside the term are escaped for safety.
+        $term = trim($searchTerm);
+        // Escape double quotes since $search uses them as delimiters
+        $escaped = str_replace('"', '\"', $term);
 
+        // Use displayName, userPrincipalName, mail, mailNickname, givenName, surname
         return sprintf(
-            "startsWith(userPrincipalName,'%s') or startsWith(mailNickname,'%s') or startsWith(mail,'%s') or startsWith(givenName,'%s') or startsWith(surname,'%s')",
+            "\"displayName:%s\" OR \"userPrincipalName:%s\" OR \"mail:%s\" OR \"mailNickname:%s\" OR \"givenName:%s\" OR \"surname:%s\"",
+            $escaped,
             $escaped,
             $escaped,
             $escaped,
@@ -191,36 +216,50 @@ class MSGraphClient
      * @throws \Exception
      * @throws \Throwable
      */
-    public function searchUsers(string $searchTerm, $nextLink = null): array
+    public function searchUsers(string $searchTerm, $nextLink = null, $companyName = null): array
     {
-        $filter = $this->buildSearchFilter($searchTerm);
-        return $this->getUsersByFilter($filter, $nextLink);
+        if(!is_null($companyName)){
+            $companyName = $this->companyNameMap[$companyName];
+        }
+        // Base $search expression on name/mail fields
+        $search = $this->buildSearchFilter($searchTerm);
+
+        // Optional company/affiliation filter for companyName
+        $companyFilter = null;
+        if ($companyName !== null && $companyName !== '') {
+            // Decode any HTML entities (e.g., Stanford Children&#039;s Health -> Stanford Children's Health)
+            $decodedCompany = html_entity_decode((string) $companyName, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            // Escape single quotes per OData by doubling them for the $filter clause
+            $escapedCompany = str_replace("'", "''", trim($decodedCompany));
+            $companyFilter = "companyName eq '" . $escapedCompany . "'";
+        }
+
+        return $this->getUsersByFilter($search, $nextLink, $companyFilter);
     }
 
 
     /**
-     * Execute a users query given an explicit OData filter and optional nextLink for pagination.
+     * Execute a users query given a Graph $search expression, optional nextLink for pagination, and optional companyName filter.
      *
-     * If `$nextLink` is provided, a raw RequestInformation with the absolute URL is used to bypass
-     * SDK pagination gaps (e.g., missing skiptoken support in some versions).
+     * Always uses advanced query params: $search, $filter (companyName), $count=true, ConsistencyLevel.
+     * Manager information is fetched with separate calls per user (no $expand).
      *
-     * @param string      $filter   OData filter expression.
-     * @param string|null $nextLink Absolute `@odata.nextLink` from a previous response (optional).
+     * @param string      $search        Graph $search expression.
+     * @param string|null $nextLink      Absolute `@odata.nextLink` from a previous response (optional).
+     * @param string|null $companyFilter Optional OData filter expression for companyName.
      * @return array{count:int|null, users:array, preview:array, nextLink:?string, prevLink:?string, @odata.nextLink:?string}
-     * @throws ApiException
-     * @throws \Exception
-     * @throws \Throwable
      */
-    public function getUsersByFilter($filter, $nextLink)
+    public function getUsersByFilter($search, $nextLink, $companyFilter = null)
     {
         $graphClient = $this->getGraphClient();
-        $queryParams = $this->getQueryParams($filter);
 
+        // Use advanced query params (no $expand, $count=true, ConsistencyLevel) for $search + optional company filter
+        $useAdvanced = true;
+        $queryParams = $this->getAdvancedQueryParams($search, $companyFilter);
 
         $requestConfig = new UsersRequestBuilderGetRequestConfiguration();
         $requestConfig->queryParameters = $queryParams;
-
-        // No ConsistencyLevel header needed since count=false
+        $requestConfig->headers = ['ConsistencyLevel' => 'eventual'];
 
         if (!is_null($nextLink)) {
             // Use a raw RequestInformation against the absolute nextLink URL.
@@ -229,7 +268,11 @@ class MSGraphClient
             $requestInfo->httpMethod = HttpMethod::GET;
             $requestInfo->urlTemplate = $nextLink;  // absolute URL
             $requestInfo->pathParameters = [];
-            $requestInfo->addHeaders(['Accept' => 'application/json']);
+            $headers = ['Accept' => 'application/json'];
+            if ($useAdvanced) {
+                $headers['ConsistencyLevel'] = 'eventual';
+            }
+            $requestInfo->addHeaders($headers);
 
             // Send and parse into a UserCollectionResponse
             $response = $graphClient->getRequestAdapter()
@@ -241,6 +284,7 @@ class MSGraphClient
         }
 
         $image = $this->module->getUrl('ajax/get_user_photo.php', true, true);
+        $managerURL = $this->module->getUrl('ajax/get_user_manager.php', true, true);
         $users = [];
         foreach ($response->getValue() as $user) {
             // Collections / complex types with safe normalization
@@ -290,24 +334,28 @@ class MSGraphClient
             }
 
             // Manager (from $expand) — best effort across SDK versions
+            // Manager
             $manager = null;
-            if (method_exists($user, 'getManager') && $user->getManager()) {
-                $mgr = $user->getManager();
-                $manager = [
-                    'id' => method_exists($mgr, 'getId') ? $mgr->getId() : null,
-                    'displayName' => method_exists($mgr, 'getDisplayName') ? $mgr->getDisplayName() : null,
-                    'mail' => method_exists($mgr, 'getMail') ? $mgr->getMail() : null,
-                    'userPrincipalName' => method_exists($mgr, 'getUserPrincipalName') ? $mgr->getUserPrincipalName() : null,
-                ];
-            } elseif (method_exists($user, 'getAdditionalData')) {
-                $ad = $user->getAdditionalData();
-                if (isset($ad['manager']) && is_array($ad['manager'])) {
+            if (!$useAdvanced) {
+                // When not using advanced filter, get manager via $expand (if available)
+                if (method_exists($user, 'getManager') && $user->getManager()) {
+                    $mgr = $user->getManager();
                     $manager = [
-                        'id' => $ad['manager']['id'] ?? null,
-                        'displayName' => $ad['manager']['displayName'] ?? null,
-                        'mail' => $ad['manager']['mail'] ?? null,
-                        'userPrincipalName' => $ad['manager']['userPrincipalName'] ?? null,
+                        'id' => method_exists($mgr, 'getId') ? $mgr->getId() : null,
+                        'displayName' => method_exists($mgr, 'getDisplayName') ? $mgr->getDisplayName() : null,
+                        'mail' => method_exists($mgr, 'getMail') ? $mgr->getMail() : null,
+                        'userPrincipalName' => method_exists($mgr, 'getUserPrincipalName') ? $mgr->getUserPrincipalName() : null,
                     ];
+                } elseif (method_exists($user, 'getAdditionalData')) {
+                    $ad = $user->getAdditionalData();
+                    if (isset($ad['manager']) && is_array($ad['manager'])) {
+                        $manager = [
+                            'id' => $ad['manager']['id'] ?? null,
+                            'displayName' => $ad['manager']['displayName'] ?? null,
+                            'mail' => $ad['manager']['mail'] ?? null,
+                            'userPrincipalName' => $ad['manager']['userPrincipalName'] ?? null,
+                        ];
+                    }
                 }
             }
 
@@ -322,12 +370,6 @@ class MSGraphClient
                 $isSoftDeleted = $ad['IsSoftDeleted'] ?? ($ad['isSoftDeleted'] ?? null);
             }
 
-            // Fetch user photo (120x120)
-            // Instead of downloading the photo, return the Graph endpoint URL
-            $photoUrl = sprintf(
-                'https://graph.microsoft.com/v1.0/users/%s/photos/120x120/$value',
-                urlencode($user->getId())
-            );
 
             $users[] = [
                 'id' => $user->getId(),
@@ -366,6 +408,7 @@ class MSGraphClient
                 'alternativeSecurityIds' => $alternativeSecurityIds,
                 'IsSoftDeleted' => $isSoftDeleted,
                 'photoUrl' => $image . '&user_id=' . urlencode($user->getId()) . '&size=120x120',
+                'managerURL' => $managerURL . '&user_id=' . urlencode($user->getId()),
                 // backward compatibility with OneDirectory fields
                 'OneDirectoryId' => $user->getId(),
                 'affiliate' => $user->getCompanyName(),
@@ -380,6 +423,12 @@ class MSGraphClient
 
             ];
         }
+
+        // For advanced companyName queries, fetch manager info per user in a second pass
+//        if ($useAdvanced && !empty($users)) {
+//            $users = $this->attachManagers($users);
+//        }
+
         $prevLinkVar = $nextLink ?: null;              // the link the client just used (if any)
         $nextLinkVar = $response->getOdataNextLink();  // the link for the next page (from Graph)
         return [
@@ -392,6 +441,47 @@ class MSGraphClient
         ];
     }
 
+
+    /**
+     * Populate the `manager` field for each user by calling the `/users/{id}/manager` endpoint.
+     *
+     * Manager calls use the async Graph SDK API under the hood; we wait on each promise so
+     * the calling code receives a fully-populated array.
+     *
+     * @param array $users Normalized users from getUsersByFilter().
+     * @return array Users with `manager` populated when available.
+     */
+    private function attachManagers(array $users): array
+    {
+        if (empty($users)) {
+            return $users;
+        }
+
+        $graphClient = $this->getGraphClient();
+
+        foreach ($users as &$user) {
+            $manager = null;
+            try {
+                // Kiota SDK returns a promise; we call wait() to resolve it.
+                $mgrObj = $graphClient->users()->byUserId($user['id'])->manager()->get()->wait();
+                if ($mgrObj) {
+                    $manager = [
+                        'id' => method_exists($mgrObj, 'getId') ? $mgrObj->getId() : null,
+                        'displayName' => method_exists($mgrObj, 'getDisplayName') ? $mgrObj->getDisplayName() : null,
+                        'mail' => method_exists($mgrObj, 'getMail') ? $mgrObj->getMail() : null,
+                        'userPrincipalName' => method_exists($mgrObj, 'getUserPrincipalName') ? $mgrObj->getUserPrincipalName() : null,
+                    ];
+                }
+            } catch (\Throwable $e) {
+                // Swallow manager lookup errors; leave manager as null
+                $manager = null;
+            }
+            $user['manager'] = $manager;
+        }
+        unset($user);
+
+        return $users;
+    }
     /**
      * Create compact preview cards array for the UI, picking the correct default image.
      *

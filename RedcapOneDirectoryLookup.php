@@ -94,10 +94,10 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
      * @throws \GuzzleHttp\Exception\GuzzleException
      * @throws ApiException
      */
-    public function searchUsers($term, $nextPage)
+    public function searchUsers($term, $nextPage, $companyName)
     {
         // Build search object
-        return $this->getMSGraphClient()->searchUsers($term, $nextPage);
+        return $this->getMSGraphClient()->searchUsers($term, $nextPage, $companyName);
     }
 
 
@@ -128,6 +128,11 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
             $ins = array();
             $ins['search-field']   = $instance['search-field'];
             $ins['alert-if-exist'] = $instance['alert-if-exist'];
+            // Affiliation enforcement settings (optional per-instance)
+            $ins['enforce-affiliation'] = $instance['enforce-affiliation'] ?? null;
+            $ins['affiliation-enforcement-source'] = $instance['affiliation-enforcement-source'] ?? null;
+            $ins['affiliation-em-value'] = $instance['affiliation-em-value'] ?? null;
+            $ins['affiliation-survey-field'] = $instance['affiliation-survey-field'] ?? null;
             foreach ($instance['attribute_instance'] as $a_index => $attribute) {
                 $k = $lookup_result_attributes[$index][$a_index];
                 $v = $lookup_result_fields[$index][$a_index];

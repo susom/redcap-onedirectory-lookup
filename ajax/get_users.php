@@ -10,9 +10,10 @@ use GuzzleHttp\Exception\RequestException;
 
 try {
     $term = htmlentities($_GET['term']);
+    $companyName = htmlentities($_GET['companyName']);
     $nextLink = $_GET['next_page'];
 
-    $response = $module->searchUsers($term, $nextLink);
+    $response = $module->searchUsers($term, $nextLink, $companyName);
     echo json_encode($response);
 } catch (\LogicException $e) {
     echo json_encode(array('status' => 'error', 'message' => $e->getMessage()));
