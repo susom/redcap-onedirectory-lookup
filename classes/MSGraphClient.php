@@ -249,6 +249,42 @@ class MSGraphClient
      * @param string|null $companyFilter Optional OData filter expression for companyName.
      * @return array{count:int|null, users:array, preview:array, nextLink:?string, prevLink:?string, @odata.nextLink:?string}
      */
+    /**
+     * Determine whether a user is a Stanford-affiliated user based on email/UPN.
+     *
+     * @param array $user Normalized user array.
+     * @return bool
+     */
+    private function isStanfordUser(array $user): bool
+    {
+        $emails = [];
+
+        if (!empty($user['mail'])) {
+            $emails[] = strtolower($user['mail']);
+        }
+        if (!empty($user['userPrincipalName'])) {
+            $emails[] = strtolower($user['userPrincipalName']);
+        }
+        if (!empty($user['otherMails']) && is_array($user['otherMails'])) {
+            foreach ($user['otherMails'] as $m) {
+                if ($m) {
+                    $emails[] = strtolower($m);
+                }
+            }
+        }
+
+        foreach ($emails as $email) {
+            if (
+                str_ends_with($email, '@stanford.edu') ||
+                str_ends_with($email, '@stanfordhealthcare.org') ||
+                str_ends_with($email, '@stanfordchildrens.org')
+            ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public function getUsersByFilter($search, $nextLink, $companyFilter = null)
     {
         $graphClient = $this->getGraphClient();
@@ -370,8 +406,7 @@ class MSGraphClient
                 $isSoftDeleted = $ad['IsSoftDeleted'] ?? ($ad['isSoftDeleted'] ?? null);
             }
 
-
-            $users[] = [
+            $normalizedUser = [
                 'id' => $user->getId(),
                 'displayName' => $user->getDisplayName(),
                 'givenName' => $user->getGivenName(),
@@ -420,8 +455,14 @@ class MSGraphClient
                 'email' => $user->getMail(),
                 'title' => $user->getJobTitle(),
                 'suid' => $user->getMailNickname(),
-
             ];
+
+            // Skip non-Stanford users
+            if (!$this->isStanfordUser($normalizedUser)) {
+                continue;
+            }
+
+            $users[] = $normalizedUser;
         }
 
         // For advanced companyName queries, fetch manager info per user in a second pass
