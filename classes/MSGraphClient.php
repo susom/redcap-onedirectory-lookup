@@ -209,8 +209,9 @@ class MSGraphClient
     /**
      * Search users by term and return a normalized payload including `users`, `preview`, and paging links.
      *
-     * @param string      $searchTerm Term to search (prefix match via startsWith).
+     * @param string      $searchTerm Ignored. Method always returns enabled users only.
      * @param string|null $nextLink   Optional absolute `@odata.nextLink` for subsequent pages.
+     * @param string|null $companyName Optional company name filter.
      * @return array{count:int|null, users:array, preview:array, nextLink:?string, prevLink:?string, @odata.nextLink:?string}
      * @throws ApiException
      * @throws \Exception
@@ -221,17 +222,26 @@ class MSGraphClient
         if(!is_null($companyName)){
             $companyName = $this->companyNameMap[$companyName];
         }
-        // Base $search expression on name/mail fields
-        $search = $this->buildSearchFilter($searchTerm);
+        // Always return only enabled accounts
+        $filterParts = [];
+        $filterParts[] = 'accountEnabled eq true';
 
         // Optional company/affiliation filter for companyName
-        $companyFilter = null;
         if ($companyName !== null && $companyName !== '') {
             // Decode any HTML entities (e.g., Stanford Children&#039;s Health -> Stanford Children's Health)
             $decodedCompany = html_entity_decode((string) $companyName, ENT_QUOTES | ENT_HTML5, 'UTF-8');
             // Escape single quotes per OData by doubling them for the $filter clause
             $escapedCompany = str_replace("'", "''", trim($decodedCompany));
-            $companyFilter = "companyName eq '" . $escapedCompany . "'";
+            $filterParts[] = "companyName eq '" . $escapedCompany . "'";
+        }
+
+        // Base $search expression on name/mail fields
+        $search = $this->buildSearchFilter($searchTerm);
+
+        // Join all filter parts with ' and ' if any
+        $companyFilter = null;
+        if (!empty($filterParts)) {
+            $companyFilter = implode(' and ', $filterParts);
         }
 
         return $this->getUsersByFilter($search, $nextLink, $companyFilter);
