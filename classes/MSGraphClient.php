@@ -225,6 +225,7 @@ class MSGraphClient
         // Always return only enabled accounts
         $filterParts = [];
         $filterParts[] = 'accountEnabled eq true';
+        $filterParts[] = 'mail ne null';
 
         // Optional company/affiliation filter for companyName
         if ($companyName !== null && $companyName !== '') {
@@ -260,15 +261,22 @@ class MSGraphClient
      * @return array{count:int|null, users:array, preview:array, nextLink:?string, prevLink:?string, @odata.nextLink:?string}
      */
     /**
-     * Determine whether a user is a Stanford-affiliated user based on email/UPN.
+     * Determine whether a user is a Stanford-affiliated user based on companyName or email/UPN.
      *
      * @param array $user Normalized user array.
      * @return bool
      */
     private function isStanfordUser(array $user): bool
     {
-        $emails = [];
+        // Primary check: companyName must be one of the configured Stanford affiliates.
+        // Values are in $this->companyNameMap (e.g., Stanford University, Stanford Health Care, Stanford Children's Health).
+        $company = isset($user['companyName']) ? trim((string)$user['companyName']) : '';
+        if (!in_array($company, array_values($this->companyNameMap), true)) {
+            return false;
+        }
 
+        // Fallback (backward compatibility): if companyName is missing/unreliable, use email domain checks.
+        $emails = [];
         if (!empty($user['mail'])) {
             $emails[] = strtolower($user['mail']);
         }
