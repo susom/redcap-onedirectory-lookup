@@ -45,6 +45,40 @@ class MSGraphClient
     ];
 
     /**
+     * Compute mailNickname based on Stanford org rules:
+     * - Stanford University or Stanford Children's Health: username part of `mail`
+     * - Stanford Health Care: username part of `userPrincipalName`
+     */
+    private function computeMailNickname(?string $companyName, ?string $mail, ?string $userPrincipalName): ?string
+    {
+        $company = trim((string)($companyName ?? ''));
+
+        $source = null;
+        if ($company === 'Stanford University' || $company === "Stanford Children's Health") {
+            $source = $mail;
+        } elseif ($company === 'Stanford Health Care') {
+            $source = $userPrincipalName;
+        } else {
+            // Fallback: prefer mail, then UPN
+            $source = $mail ?: $userPrincipalName;
+        }
+
+        $source = trim((string)($source ?? ''));
+        if ($source === '') {
+            return null;
+        }
+
+        $atPos = strpos($source, '@');
+        if ($atPos === false) {
+            return $source;
+        }
+
+        $username = substr($source, 0, $atPos);
+        $username = trim((string)$username);
+        return $username !== '' ? $username : null;
+    }
+
+    /**
      * Lazily-initialized GraphServiceClient instance.
      *
      * @var GraphServiceClient|null
@@ -414,6 +448,11 @@ class MSGraphClient
                 $isSoftDeleted = $ad['IsSoftDeleted'] ?? ($ad['isSoftDeleted'] ?? null);
             }
 
+            $companyNameVal = $user->getCompanyName();
+            $mailVal = $user->getMail();
+            $upnVal = $user->getUserPrincipalName();
+            $effectiveMailNickname = $this->computeMailNickname($companyNameVal, $mailVal, $upnVal);
+
             $normalizedUser = [
                 'id' => $user->getId(),
                 'displayName' => $user->getDisplayName(),
@@ -431,7 +470,7 @@ class MSGraphClient
                 'preferredLanguage' => $user->getPreferredLanguage(),
                 'identities' => $identities,
                 'otherMails' => method_exists($user, 'getOtherMails') && $user->getOtherMails() ? $user->getOtherMails() : [],
-                'mailNickname' => $user->getMailNickname(),
+                'mailNickname' => $effectiveMailNickname,
                 'usageLocation' => $user->getUsageLocation(),
                 'createdDateTime' => $user->getCreatedDateTime() ? $user->getCreatedDateTime()->format(DATE_ATOM) : null,
                 'assignedLicenses' => $assignedLicenses,
@@ -462,7 +501,7 @@ class MSGraphClient
                 'phone' => $user->getMobilePhone() ?: (isset($businessPhones[0]) ? $businessPhones[0] : null),
                 'email' => $user->getMail(),
                 'title' => $user->getJobTitle(),
-                'suid' => $user->getMailNickname(),
+                'suid' => $effectiveMailNickname,
             ];
 
             // Skip non-Stanford users
