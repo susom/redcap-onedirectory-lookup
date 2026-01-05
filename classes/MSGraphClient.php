@@ -219,31 +219,27 @@ class MSGraphClient
      */
     public function searchUsers(string $searchTerm, $nextLink = null, $companyName = null): array
     {
-        if(!is_null($companyName)){
-            $companyName = $this->companyNameMap[$companyName];
-        }
-        // Always return only enabled accounts
-        $filterParts = [];
-        $filterParts[] = 'accountEnabled eq true';
-        $filterParts[] = 'mail ne null';
-
-        // Optional company/affiliation filter for companyName
-        if ($companyName !== null && $companyName !== '') {
-            // Decode any HTML entities (e.g., Stanford Children&#039;s Health -> Stanford Children's Health)
-            $decodedCompany = html_entity_decode((string) $companyName, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-            // Escape single quotes per OData by doubling them for the $filter clause
-            $escapedCompany = str_replace("'", "''", trim($decodedCompany));
-            $filterParts[] = "companyName eq '" . $escapedCompany . "'";
-        }
-
         // Base $search expression on name/mail fields
         $search = $this->buildSearchFilter($searchTerm);
 
-        // Join all filter parts with ' and ' if any
-        $companyFilter = null;
-        if (!empty($filterParts)) {
-            $companyFilter = implode(' and ', $filterParts);
-        }
+        // Single Graph $filter that OR-combines the 3 Stanford org conditions.
+        // NOTE: Graph does not support contains() in $filter; domain checks use endswith(mail,'@domain').
+
+        $adult = "(accountEnabled eq true"
+            . " and not endswith(userPrincipalName,'-a@stanfordhealthcare.org')"
+            . " and startswith(userPrincipalName,'S0')"
+            . " and endswith(mail,'@stanfordhealthcare.org')"
+            . " and userType ne 'Guest')";
+
+        $children = "(accountEnabled eq true"
+            . " and userType eq 'Guest'"
+            . " and endswith(mail,'@stanfordchildrens.org'))";
+
+        $university = "(accountEnabled eq true"
+            . " and userType eq 'Guest'"
+            . " and endswith(mail,'@stanford.edu'))";
+
+        $companyFilter = $adult . ' or ' . $children . ' or ' . $university;
 
         return $this->getUsersByFilter($search, $nextLink, $companyFilter);
     }
@@ -268,12 +264,6 @@ class MSGraphClient
      */
     private function isStanfordUser(array $user): bool
     {
-        // Primary check: companyName must be one of the configured Stanford affiliates.
-        // Values are in $this->companyNameMap (e.g., Stanford University, Stanford Health Care, Stanford Children's Health).
-        $company = isset($user['companyName']) ? trim((string)$user['companyName']) : '';
-        if (!in_array($company, array_values($this->companyNameMap), true)) {
-            return false;
-        }
 
         // Fallback (backward compatibility): if companyName is missing/unreliable, use email domain checks.
         $emails = [];
