@@ -741,7 +741,12 @@ class MSGraphClient
             // Normalize spacing and case
             $name = strtolower(preg_replace('/\s+/', ' ', $name));
 
-            // Only apply when it's exactly ONE word
+            // If the name contains any digits, treat as non-real/service/test and ignore
+            if (preg_match('/\d/', $name)) {
+                return true;
+            }
+
+            // Only apply ignore-word rule when it's exactly ONE word
             if (strpos($name, ' ') !== false) {
                 return false;
             }
