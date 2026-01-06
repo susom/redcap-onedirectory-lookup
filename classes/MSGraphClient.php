@@ -45,6 +45,19 @@ class MSGraphClient
     ];
 
     /**
+     * Ignore-list for non-real / service / test accounts.
+     * If the FIRST or LAST name is exactly one of these words (case-insensitive), the user is skipped.
+     *
+     * Keep this list small and conservative.
+     *
+     * @var string[]
+     */
+    private array $ignoreNameWords = [
+        'test',
+        'admin',
+    ];
+
+    /**
      * Compute mailNickname based on Stanford org rules:
      * - Stanford University or Stanford Children's Health: username part of `mail`
      * - Stanford Health Care: username part of `userPrincipalName`
@@ -126,11 +139,11 @@ class MSGraphClient
      * @var string[]
      */
     private const DEFAULT_ATTRIBUTES = [
-        'id','displayName','givenName','surname','mail','userPrincipalName','accountEnabled',
-        'jobTitle','department','companyName','officeLocation','businessPhones','mobilePhone',
-        'preferredLanguage','identities','otherMails','mailNickname','usageLocation','createdDateTime',
-        'assignedLicenses','assignedPlans','onPremisesExtensionAttributes','streetAddress','city','state',
-        'postalCode','country','physicalDeliveryOfficeName','telephoneNumber','userType','showInAddressList'
+        'id', 'displayName', 'givenName', 'surname', 'mail', 'userPrincipalName', 'accountEnabled',
+        'jobTitle', 'department', 'companyName', 'officeLocation', 'businessPhones', 'mobilePhone',
+        'preferredLanguage', 'identities', 'otherMails', 'mailNickname', 'usageLocation', 'createdDateTime',
+        'assignedLicenses', 'assignedPlans', 'onPremisesExtensionAttributes', 'streetAddress', 'city', 'state',
+        'postalCode', 'country', 'physicalDeliveryOfficeName', 'telephoneNumber', 'userType', 'showInAddressList'
     ];
     /**
      * Reference to the REDCap External Module instance for URL generation, etc.
@@ -140,8 +153,8 @@ class MSGraphClient
     private $module;
 
     /**
-     * @param mixed               $module        REDCap EM instance used to build asset URLs.
-     * @param string[]            $attributes    Optional override for `$select` attributes.
+     * @param mixed $module REDCap EM instance used to build asset URLs.
+     * @param string[] $attributes Optional override for `$select` attributes.
      */
     public function __construct($tenantId, $clientId, $clientSecret, $module, $attributes = [])
     {
@@ -243,8 +256,8 @@ class MSGraphClient
     /**
      * Search users by term and return a normalized payload including `users`, `preview`, and paging links.
      *
-     * @param string      $searchTerm Ignored. Method always returns enabled users only.
-     * @param string|null $nextLink   Optional absolute `@odata.nextLink` for subsequent pages.
+     * @param string $searchTerm Ignored. Method always returns enabled users only.
+     * @param string|null $nextLink Optional absolute `@odata.nextLink` for subsequent pages.
      * @param string|null $companyName Optional company name filter.
      * @return array{count:int|null, users:array, preview:array, nextLink:?string, prevLink:?string, @odata.nextLink:?string}
      * @throws ApiException
@@ -285,8 +298,8 @@ class MSGraphClient
      * Always uses advanced query params: $search, $filter (companyName), $count=true, ConsistencyLevel.
      * Manager information is fetched with separate calls per user (no $expand).
      *
-     * @param string      $search        Graph $search expression.
-     * @param string|null $nextLink      Absolute `@odata.nextLink` from a previous response (optional).
+     * @param string $search Graph $search expression.
+     * @param string|null $nextLink Absolute `@odata.nextLink` from a previous response (optional).
      * @param string|null $companyFilter Optional OData filter expression for companyName.
      * @return array{count:int|null, users:array, preview:array, nextLink:?string, prevLink:?string, @odata.nextLink:?string}
      */
@@ -405,9 +418,9 @@ class MSGraphClient
             if (method_exists($user, 'getOnPremisesExtensionAttributes') && $user->getOnPremisesExtensionAttributes()) {
                 $ext = $user->getOnPremisesExtensionAttributes();
                 $onPremExt = [];
-                for ($i=1; $i<=15; $i++) {
-                    $getter = 'getExtensionAttribute'.$i;
-                    $onPremExt['extensionAttribute'.$i] = method_exists($ext, $getter) ? $ext->$getter() : null;
+                for ($i = 1; $i <= 15; $i++) {
+                    $getter = 'getExtensionAttribute' . $i;
+                    $onPremExt['extensionAttribute' . $i] = method_exists($ext, $getter) ? $ext->$getter() : null;
                 }
             }
 
@@ -504,6 +517,11 @@ class MSGraphClient
                 'suid' => $effectiveMailNickname,
             ];
 
+            // Skip obvious non-real/service/test accounts
+            if ($this->shouldIgnoreByName($normalizedUser)) {
+                continue;
+            }
+
             // Skip non-Stanford users
             if (!$this->isStanfordUser($normalizedUser)) {
                 continue;
@@ -570,6 +588,7 @@ class MSGraphClient
 
         return $users;
     }
+
     /**
      * Create compact preview cards array for the UI, picking the correct default image.
      *
@@ -597,11 +616,11 @@ class MSGraphClient
                     : $image;
 
                 $result[] = array(
-                    'id'    => $user['id'],
-                    'label'    => $user['displayName'],
-                    'title'    => $user['jobTitle'],
-                    'suid'    => $user['mailNickname'],
-                    'value'    => $user['displayName'],
+                    'id' => $user['id'],
+                    'label' => $user['displayName'],
+                    'title' => $user['jobTitle'],
+                    'suid' => $user['mailNickname'],
+                    'value' => $user['displayName'],
                     'array' => $user,
                     'image' => $finalImage
                 );
@@ -617,7 +636,7 @@ class MSGraphClient
      */
     private function getSUImage()
     {
-        if(!$this->SUImage) {
+        if (!$this->SUImage) {
             $this->SUImage = $this->module->getUrl('assets/images/stanford_university.png', true, true);
         }
         return $this->SUImage;
@@ -630,12 +649,13 @@ class MSGraphClient
      */
     private function getSoMImage()
     {
-        if(!$this->SoMImage) {
+        if (!$this->SoMImage) {
             $this->SoMImage = $this->module->getUrl('assets/images/stanford_medicine.png', true, true);
 
         }
         return $this->SoMImage;
     }
+
     /**
      * Acquire and cache an app-only access token for Microsoft Graph via OAuth2 client credentials.
      *
@@ -681,7 +701,7 @@ class MSGraphClient
                 ],
             ]);
             $status = $resp->getStatusCode();
-            $body = (string) $resp->getBody();
+            $body = (string)$resp->getBody();
             if ($status !== 200) {
                 error_log('[MSGraphClient] Token request failed: HTTP ' . $status . ' body=' . substr($body, 0, 500));
                 return null;
@@ -702,5 +722,33 @@ class MSGraphClient
             error_log('[MSGraphClient] Token request unexpected error: ' . $e->getMessage());
             return null;
         }
+    }
+
+    /**
+     * Return true if the user should be ignored based on first/last name.
+     * Rule: if givenName OR surname is a single word that exactly matches one of $ignoreNameWords.
+     */
+    private function shouldIgnoreByName(array $user): bool
+    {
+        $given = isset($user['givenName']) ? trim((string)$user['givenName']) : '';
+        $sur = isset($user['surname']) ? trim((string)$user['surname']) : '';
+
+        $check = function (string $name): bool {
+            if ($name === '') {
+                return false;
+            }
+
+            // Normalize spacing and case
+            $name = strtolower(preg_replace('/\s+/', ' ', $name));
+
+            // Only apply when it's exactly ONE word
+            if (strpos($name, ' ') !== false) {
+                return false;
+            }
+
+            return in_array($name, $this->ignoreNameWords, true);
+        };
+
+        return $check($given) || $check($sur);
     }
 }
