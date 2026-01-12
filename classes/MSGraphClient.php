@@ -58,6 +58,23 @@ class MSGraphClient
     ];
 
     /**
+     * Ignore-list for non-real / service / test accounts by email.
+     *
+     * If any candidate email (mail / userPrincipalName / otherMails) matches one of these words
+     * (case-insensitive) either as the full address or the local-part (before '@'), the user is skipped.
+     *
+     * Keep this list small and conservative.
+     *
+     * @var string[]
+     */
+    private array $ignoreEmailWords = [
+        'testjamf2',
+        'test365',
+        "admin-hospitalmed",
+        "qle_admins"
+    ];
+
+    /**
      * Compute mailNickname based on Stanford org rules:
      * - Stanford University or Stanford Children's Health: username part of `mail`
      * - Stanford Health Care: username part of `userPrincipalName`
@@ -518,7 +535,7 @@ class MSGraphClient
             ];
 
             // Skip obvious non-real/service/test accounts
-            if ($this->shouldIgnoreByName($normalizedUser)) {
+            if ($this->shouldIgnoreByName($normalizedUser) || $this->shouldIgnoreByEmail($normalizedUser)) {
                 continue;
             }
 
@@ -755,5 +772,64 @@ class MSGraphClient
         };
 
         return $check($given) || $check($sur);
+    }
+
+    /**
+     * Return true if the user should be ignored based on email/UPN.
+     *
+     * Rule: if `mail` OR `userPrincipalName` OR any entry in `otherMails` matches one of
+     * $ignoreEmailWords (case-insensitive), either as a full address or as the local-part
+     * (the portion before '@'), the user is skipped.
+     */
+    private function shouldIgnoreByEmail(array $user): bool
+    {
+        $ignore = [];
+        foreach ($this->ignoreEmailWords as $w) {
+            $w = strtolower(trim((string)$w));
+            if ($w !== '') {
+                $ignore[$w] = true;
+            }
+        }
+        if (empty($ignore)) {
+            return false;
+        }
+
+        $candidates = [];
+        if (!empty($user['mail'])) {
+            $candidates[] = (string)$user['mail'];
+        }
+        if (!empty($user['userPrincipalName'])) {
+            $candidates[] = (string)$user['userPrincipalName'];
+        }
+        if (!empty($user['otherMails']) && is_array($user['otherMails'])) {
+            foreach ($user['otherMails'] as $m) {
+                if (!empty($m)) {
+                    $candidates[] = (string)$m;
+                }
+            }
+        }
+
+        foreach ($candidates as $raw) {
+            $s = strtolower(trim((string)$raw));
+            if ($s === '') {
+                continue;
+            }
+
+            // Full address match
+            if (isset($ignore[$s])) {
+                return true;
+            }
+
+            // Local-part match
+            $atPos = strpos($s, '@');
+            if ($atPos !== false) {
+                $local = trim(substr($s, 0, $atPos));
+                if ($local !== '' && isset($ignore[$local])) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }
