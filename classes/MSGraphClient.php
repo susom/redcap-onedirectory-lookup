@@ -286,24 +286,29 @@ class MSGraphClient
         // Base $search expression on name/mail fields
         $search = $this->buildSearchFilter($searchTerm);
 
-        // Single Graph $filter that OR-combines the 3 Stanford org conditions.
-        // NOTE: Graph does not support contains() in $filter; domain checks use endswith(mail,'@domain').
+        // If companyName is defined, use it as a filter; otherwise use the default Stanford org conditions
+        if (!empty($companyName)) {
+            $companyFilter = "companyName eq '" . str_replace("'", "''", $this->companyNameMap[$companyName]) . "'";
+        } else {
+            // Single Graph $filter that OR-combines the 3 Stanford org conditions.
+            // NOTE: Graph does not support contains() in $filter; domain checks use endswith(mail,'@domain').
 
-        $adult = "(accountEnabled eq true"
-            . " and not endswith(userPrincipalName,'-a@stanfordhealthcare.org')"
-            . " and startswith(userPrincipalName,'S0')"
-            . " and endswith(mail,'@stanfordhealthcare.org')"
-            . " and userType ne 'Guest')";
+            $adult = "(accountEnabled eq true"
+                . " and not endswith(userPrincipalName,'-a@stanfordhealthcare.org')"
+                . " and startswith(userPrincipalName,'S0')"
+                . " and endswith(mail,'@stanfordhealthcare.org')"
+                . " and userType ne 'Guest')";
 
-        $children = "(accountEnabled eq true"
-            . " and userType eq 'Guest'"
-            . " and endswith(mail,'@stanfordchildrens.org'))";
+            $children = "(accountEnabled eq true"
+                . " and userType eq 'Guest'"
+                . " and endswith(mail,'@stanfordchildrens.org'))";
 
-        $university = "(accountEnabled eq true"
-            . " and userType eq 'Guest'"
-            . " and endswith(mail,'@stanford.edu'))";
+            $university = "(accountEnabled eq true"
+                . " and userType eq 'Guest'"
+                . " and endswith(mail,'@stanford.edu'))";
 
-        $companyFilter = $adult . ' or ' . $children . ' or ' . $university;
+            $companyFilter = $adult . ' or ' . $children . ' or ' . $university;
+        }
 
         return $this->getUsersByFilter($search, $nextLink, $companyFilter);
     }
