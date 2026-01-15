@@ -5,12 +5,20 @@ use Google\ApiCore\ApiException;
 use Google\Cloud\SecretManager\V1\Client\SecretManagerServiceClient;
 use Google\Cloud\SecretManager\V1\AccessSecretVersionRequest;
 use Google\Protobuf\Internal\GPBDecodeException;
+use Google\Cloud\SecretManager\V1\AccessSecretVersionResponse;
 
 class GoogleSecretManager {
     private $grpcClient;
     private $restClient;
     private $projectId;
     private $keyJson;
+
+    // ---- Pure HTTP fallback (avoids protobuf parsing issues entirely) ----
+    private const METADATA_TOKEN_URL = 'http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/token';
+    private const SECRET_MANAGER_ACCESS_URL = 'https://secretmanager.googleapis.com/v1/projects/%s/secrets/%s/versions/%s:access';
+
+    private ?string $cachedHttpAccessToken = null;
+    private int $cachedHttpAccessTokenExpiresAt = 0;
 
     public function __construct(string $projectId, ?string $keyJson = null) {
         $this->projectId = $projectId;
@@ -109,21 +117,19 @@ class GoogleSecretManager {
 
             return $secretValue;
         } catch (GPBDecodeException $e) {
-            // Common when a proxy/load balancer corrupts or truncates gRPC frames.
-            // Retry using REST transport.
-            error_log('[GoogleSecretManager] GPBDecodeException (gRPC parse) for secret ' . $key . ': ' . $e->getMessage());
-            error_log('[GoogleSecretManager] Retrying Secret Manager call using REST transport...');
+            // We can hit protobuf decoding errors even when using the library's REST transport,
+            // because the client still converts JSON -> protobuf internally.
+            // In some prod networks/proxies, the response can be truncated or altered.
+            // The most reliable fix is to bypass the library and call the REST API directly.
+            error_log('[GoogleSecretManager] GPBDecodeException for secret ' . $key . ': ' . $e->getMessage());
+            error_log('[GoogleSecretManager] Falling back to pure HTTP Secret Manager REST call...');
 
-            $name = $this->getClient('rest')->secretVersionName($this->projectId, $key, 'latest');
-            $request = AccessSecretVersionRequest::build($name);
-            $response = $this->getClient('rest')->accessSecretVersion($request);
-
-            error_log('[GoogleSecretManager] Successfully retrieved secret via REST: ' . $key);
-            $secretValue = $response->getPayload()->getData();
+            $secretValue = $this->getSecretViaHttp($key, 'latest');
+            error_log('[GoogleSecretManager] Successfully retrieved secret via pure HTTP: ' . $key);
             if (empty($secretValue)) {
-                error_log('[GoogleSecretManager] WARNING: Retrieved empty value for secret (REST): ' . $key);
+                error_log('[GoogleSecretManager] WARNING: Retrieved empty value for secret (pure HTTP): ' . $key);
             } else {
-                error_log('[GoogleSecretManager] Secret retrieved successfully via REST, value length: ' . strlen($secretValue) . ' bytes');
+                error_log('[GoogleSecretManager] Secret retrieved successfully via pure HTTP, value length: ' . strlen($secretValue) . ' bytes');
             }
 
             return $secretValue;
@@ -135,18 +141,14 @@ class GoogleSecretManager {
             $msg = $e->getMessage();
             if (stripos($msg, 'gRPC support has been requested') !== false) {
                 error_log('[GoogleSecretManager] gRPC extension missing: ' . $msg);
-                error_log('[GoogleSecretManager] Retrying Secret Manager call using REST transport...');
+                error_log('[GoogleSecretManager] Falling back to pure HTTP Secret Manager REST call...');
 
-                $name = $this->getClient('rest')->secretVersionName($this->projectId, $key, 'latest');
-                $request = AccessSecretVersionRequest::build($name);
-                $response = $this->getClient('rest')->accessSecretVersion($request);
-
-                error_log('[GoogleSecretManager] Successfully retrieved secret via REST: ' . $key);
-                $secretValue = $response->getPayload()->getData();
+                $secretValue = $this->getSecretViaHttp($key, 'latest');
+                error_log('[GoogleSecretManager] Successfully retrieved secret via pure HTTP: ' . $key);
                 if (empty($secretValue)) {
-                    error_log('[GoogleSecretManager] WARNING: Retrieved empty value for secret (REST): ' . $key);
+                    error_log('[GoogleSecretManager] WARNING: Retrieved empty value for secret (pure HTTP): ' . $key);
                 } else {
-                    error_log('[GoogleSecretManager] Secret retrieved successfully via REST, value length: ' . strlen($secretValue) . ' bytes');
+                    error_log('[GoogleSecretManager] Secret retrieved successfully via pure HTTP, value length: ' . strlen($secretValue) . ' bytes');
                 }
 
                 return $secretValue;
@@ -163,5 +165,113 @@ class GoogleSecretManager {
             error_log('[GoogleSecretManager] Exception class: ' . get_class($e));
             throw $e;
         }
+    }
+    /**
+     * Pure HTTP: get access token from GKE/GCE metadata server.
+     * This is the most reliable option inside GKE when gRPC/protobuf parsing is flaky.
+     */
+    private function getHttpAccessTokenFromMetadata(): string
+    {
+        $now = time();
+        if ($this->cachedHttpAccessToken && ($this->cachedHttpAccessTokenExpiresAt - 60) > $now) {
+            return $this->cachedHttpAccessToken;
+        }
+
+        $ch = curl_init();
+        if ($ch === false) {
+            throw new \RuntimeException('Failed to init cURL for metadata token');
+        }
+
+        curl_setopt($ch, CURLOPT_URL, self::METADATA_TOKEN_URL);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HEADER, false);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 2);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 1);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Metadata-Flavor: Google',
+            'Accept: application/json',
+        ]);
+
+        $body = curl_exec($ch);
+        if ($body === false) {
+            $errno = curl_errno($ch);
+            $err = curl_error($ch);
+            curl_close($ch);
+            throw new \RuntimeException('Metadata token cURL error ' . $errno . ': ' . $err);
+        }
+
+        $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($status !== 200) {
+            throw new \RuntimeException('Metadata token HTTP ' . $status . ' body=' . substr((string)$body, 0, 300));
+        }
+
+        $data = json_decode((string)$body, true);
+        if (!is_array($data) || empty($data['access_token'])) {
+            throw new \RuntimeException('Metadata token response missing access_token. body=' . substr((string)$body, 0, 300));
+        }
+
+        $token = (string)$data['access_token'];
+        $expiresIn = (int)($data['expires_in'] ?? 3600);
+
+        $this->cachedHttpAccessToken = $token;
+        $this->cachedHttpAccessTokenExpiresAt = time() + max(60, $expiresIn);
+
+        return $token;
+    }
+
+    /**
+     * Pure HTTP: read secret via Secret Manager REST API and base64 decode the payload.
+     * Returns the plaintext secret value.
+     */
+    private function getSecretViaHttp(string $key, string $version = 'latest'): string
+    {
+        // This fallback is intended for GKE/GCE where metadata server is available.
+        $token = $this->getHttpAccessTokenFromMetadata();
+
+        $url = sprintf(self::SECRET_MANAGER_ACCESS_URL, $this->projectId, $key, $version);
+
+        $ch = curl_init();
+        if ($ch === false) {
+            throw new \RuntimeException('Failed to init cURL for secret access');
+        }
+
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HEADER, false);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Authorization: Bearer ' . $token,
+            'Accept: application/json',
+        ]);
+
+        $body = curl_exec($ch);
+        if ($body === false) {
+            $errno = curl_errno($ch);
+            $err = curl_error($ch);
+            curl_close($ch);
+            throw new \RuntimeException('Secret HTTP cURL error ' . $errno . ': ' . $err);
+        }
+
+        $status = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($status !== 200) {
+            throw new \RuntimeException('Secret Manager REST HTTP ' . $status . ' body=' . substr((string)$body, 0, 500));
+        }
+
+        $data = json_decode((string)$body, true);
+        if (!is_array($data) || empty($data['payload']['data'])) {
+            throw new \RuntimeException('Secret Manager REST response missing payload.data. body=' . substr((string)$body, 0, 500));
+        }
+
+        $decoded = base64_decode((string)$data['payload']['data'], true);
+        if ($decoded === false) {
+            throw new \RuntimeException('Failed to base64 decode secret payload for ' . $key);
+        }
+
+        return $decoded;
     }
 }
