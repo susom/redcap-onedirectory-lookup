@@ -2,6 +2,7 @@
 namespace Stanford\RedcapOneDirectoryLookup;
 
 require_once "vendor/autoload.php";
+require_once "classes/GoogleSecretManager.php";
 require_once "classes/MSGraphClient.php";
 require_once "emLoggerTrait.php";
 
@@ -59,6 +60,7 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
      * @var MSGraphClient|null
      */
     private $msGraphClient;
+    private $secretManager = null;
 
     /**
      * Module constructor.
@@ -248,6 +250,16 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
         $this->serverURL = $serverURL;
     }
 
+    private function getSecretManager()
+    {
+        if (!$this->secretManager) {
+            $this->secretManager = new GoogleSecretManager(
+                $this->getSystemSetting('google-cloud-project-id'),
+                ''
+            );
+        }
+        return $this->secretManager;
+    }
 
     /**
      * Lazily create (and cache) the Microsoft Graph client helper.
@@ -257,7 +269,7 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
     public function getMSGraphClient(): MSGraphClient
     {
         if (!$this->msGraphClient) {
-            $this->msGraphClient = new MSGraphClient($this->getSystemSetting('microsoft-azure-tenant-id'), $this->getSystemSetting('microsoft-azure-client-id'), $this->getSystemSetting('microsoft-azure-client-secret'), $this);
+            $this->msGraphClient = new MSGraphClient($this->getSecretManager(), $this);
         }
         return $this->msGraphClient;
     }

@@ -2,43 +2,64 @@
 
 namespace Stanford\RedcapOneDirectoryLookup;
 
+use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\Exception\GuzzleException;
-use GuzzleHttp\Psr7;
-use GuzzleHttp\Exception\RequestException;
 
 /** @var RedcapOneDirectoryLookup $module */
 
-// photo.php (module page)
 $userId = $_GET['user_id'] ?? null;
 $size   = $_GET['size']   ?? '120x120';
-$company = $_GET['companyName'] ?? null;
-if (!$userId) { http_response_code(400); exit('user_id required'); }
+
+if (!$userId) {
+    http_response_code(400);
+    exit('user_id required');
+}
 
 try {
-    $graph = $module->getMSGraphClient()->getGraphClient();
-    $stream = $graph->users()
-        ->byUserId($userId)
-        ->photos()
-        ->byProfilePhotoId($size)
-        ->content()
-        ->get()
-        ->wait();
+    // Get access token (with system settings caching)
+    $msGraphClient = $module->getMSGraphClient();
+    $accessToken = $msGraphClient->getAccessToken();
 
-    // Read PSR-7 stream safely
-    if ($stream instanceof \Psr\Http\Message\StreamInterface) {
-        $stream->rewind();
-        $bytes = $stream->getContents();
-    } else {
-        $bytes = is_resource($stream) ? stream_get_contents($stream) : null;
+    if (!$accessToken) {
+        http_response_code(401);
+        exit('Failed to obtain access token');
     }
 
-    if (!$bytes) { http_response_code(404); exit; }
+    // Make direct HTTP request to get photo
+    $graphUrl = 'https://graph.microsoft.com/v1.0/users/' . urlencode($userId) . '/photos/' . urlencode($size) . '/$value';
+
+    $http = new GuzzleClient([
+        'timeout' => 10.0,
+        'connect_timeout' => 5.0,
+    ]);
+
+    $response = $http->get($graphUrl, [
+        'headers' => [
+            'Authorization' => 'Bearer ' . $accessToken,
+            'Accept' => 'image/jpeg',
+        ],
+    ]);
+
+    $statusCode = $response->getStatusCode();
+    if ($statusCode !== 200) {
+        http_response_code(404);
+        exit('Photo not found');
+    }
+
+    $bytes = (string)$response->getBody();
+    if (!$bytes) {
+        http_response_code(404);
+        exit('Empty photo response');
+    }
 
     header('Content-Type: image/jpeg');
     header('Cache-Control: private, max-age=300');
     echo $bytes;
-} catch (\Throwable $e) {
+} catch (GuzzleException $e) {
     // No photo or no permission
     http_response_code(404);
-    echo $e->getMessage();
+    exit('Photo request failed: ' . $e->getMessage());
+} catch (\Throwable $e) {
+    http_response_code(500);
+    exit('Error: ' . $e->getMessage());
 }

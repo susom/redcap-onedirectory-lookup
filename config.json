@@ -342,21 +342,15 @@
             "type": "text"
         },
         {
-            "key": "microsoft-azure-tenant-id",
-            "name": "<b>Microsoft Azure Tenant ID:</b>",
-            "required": true,
+            "key": "microsoft-graph-access-token",
+            "name": "<b>Microsoft Graph Access token:</b>",
+            "required": false,
             "type": "text"
         },
         {
-            "key": "microsoft-azure-client-id",
-            "name": "<b>Microsoft Azure Client ID:</b>",
-            "required": true,
-            "type": "text"
-        },
-        {
-            "key": "microsoft-azure-client-secret",
-            "name": "<b>Microsoft Azure Client Secret:</b>",
-            "required": true,
+            "key": "microsoft-graph-access-token-expiration-timestamp",
+            "name": "<b>Microsoft Graph Access token expiration timestamp:</b>",
+            "required": false,
             "type": "text"
         },
         {

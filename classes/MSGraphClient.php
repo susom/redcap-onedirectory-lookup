@@ -6,13 +6,6 @@ namespace Stanford\RedcapOneDirectoryLookup;
 use Google\ApiCore\ApiException;
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\Exception\GuzzleException;
-use Microsoft\Graph\GraphServiceClient;
-use Microsoft\Kiota\Authentication\Oauth\ClientCredentialContext;
-use Microsoft\Graph\Generated\Users\UsersRequestBuilderGetQueryParameters;
-use Microsoft\Graph\Generated\Users\UsersRequestBuilderGetRequestConfiguration;
-use Microsoft\Kiota\Abstractions\RequestInformation;
-use Microsoft\Kiota\Abstractions\HttpMethod;
-use Microsoft\Graph\Generated\Models\UserCollectionResponse;
 
 /**
  * Microsoft Graph client helper for app-only lookups and user search.
@@ -38,6 +31,9 @@ use Microsoft\Graph\Generated\Models\UserCollectionResponse;
  */
 class MSGraphClient
 {
+    const MS_GRAPH_CLIENT_ID = 'MS_GRAPH_CLIENT_ID';
+    const MS_GRAPH_TENANT_ID = 'MS_GRAPH_TENANT_ID';
+    const MS_GRAPH_CLIENT_SECRET = 'MS_GRAPH_CLIENT_SECRET';
     private $companyNameMap = [
         '1' => "Stanford Children's Health",
         '2' => 'Stanford Health Care',
@@ -73,40 +69,8 @@ class MSGraphClient
         "admin-hospitalmed",
         "qle_admins"
     ];
+    private GoogleSecretManager $secretManager;
 
-    /**
-     * Compute mailNickname based on Stanford org rules:
-     * - Stanford University or Stanford Children's Health: username part of `mail`
-     * - Stanford Health Care: username part of `userPrincipalName`
-     */
-    private function computeMailNickname(?string $companyName, ?string $mail, ?string $userPrincipalName): ?string
-    {
-        $company = trim((string)($companyName ?? ''));
-
-        $source = null;
-        if ($company === 'Stanford University' || $company === "Stanford Children's Health") {
-            $source = $mail;
-        } elseif ($company === 'Stanford Health Care') {
-            $source = $userPrincipalName;
-        } else {
-            // Fallback: prefer mail, then UPN
-            $source = $mail ?: $userPrincipalName;
-        }
-
-        $source = trim((string)($source ?? ''));
-        if ($source === '') {
-            return null;
-        }
-
-        $atPos = strpos($source, '@');
-        if ($atPos === false) {
-            return $source;
-        }
-
-        $username = substr($source, 0, $atPos);
-        $username = trim((string)$username);
-        return $username !== '' ? $username : null;
-    }
 
     /**
      * Lazily-initialized GraphServiceClient instance.
@@ -173,73 +137,122 @@ class MSGraphClient
      * @param mixed $module REDCap EM instance used to build asset URLs.
      * @param string[] $attributes Optional override for `$select` attributes.
      */
-    public function __construct($tenantId, $clientId, $clientSecret, $module, $attributes = [])
+    public function __construct(GoogleSecretManager $secretManager, $module,$attributes = [])
     {
         $this->module = $module;
-        $this->tenantId = $tenantId;
-        $this->clientId = $clientId;
-        $this->clientSecret = $clientSecret;
+        $this->secretManager = $secretManager;
         $this->attributes = $attributes && is_array($attributes) && count($attributes) > 0
             ? array_values(array_unique(array_map('trim', $attributes)))
             : self::DEFAULT_ATTRIBUTES;
     }
 
     /**
-     * Initialize (once) and return the Microsoft Graph client using client credentials.
+     * Make a GET request to Microsoft Graph API with the cached access token.
      *
-     * Credentials are loaded from Google Secret Manager using keys:
-     * MS_GRAPH_TENANT_ID, MS_GRAPH_CLIENT_ID, MS_GRAPH_CLIENT_SECRET.
-     *
-     * @return GraphServiceClient
-     * @throws ApiException On errors from underlying SDK calls.
+     * @param string $endpoint The API endpoint (e.g., '/users')
+     * @param array $queryParams Query parameters to append to the URL
+     * @param array $additionalHeaders Additional headers to include in the request
+     * @return array Decoded JSON response, or empty array on error
      */
-    public function getGraphClient(): GraphServiceClient
+    private function graphGetRequest(string $endpoint, array $queryParams = [], array $additionalHeaders = []): array
     {
-        if (!$this->client) {
-            $tokenRequestContext = new ClientCredentialContext(
-                $this->tenantId,
-                $this->clientId,
-                $this->clientSecret,
-            );
-            $this->client = new GraphServiceClient($tokenRequestContext);
+        // Get (or refresh) the access token from system settings
+        $accessToken = $this->getAccessToken();
+        if (!$accessToken) {
+            error_log('[MSGraphClient] Failed to get access token for Graph request.');
+            return [];
         }
-        return $this->client;
+
+        $baseUrl = 'https://graph.microsoft.com/v1.0';
+        $url = $baseUrl . $endpoint;
+
+        if (!empty($queryParams)) {
+            $url .= '?' . http_build_query($queryParams);
+        }
+
+        $headers = [
+            'Authorization' => 'Bearer ' . $accessToken,
+            'Accept' => 'application/json',
+            'Content-Type' => 'application/json',
+        ];
+
+        // Merge additional headers
+        $headers = array_merge($headers, $additionalHeaders);
+
+        $http = new GuzzleClient([
+            'timeout' => 10.0,
+            'connect_timeout' => 5.0,
+        ]);
+
+        try {
+            $response = $http->get($url, ['headers' => $headers]);
+
+            $statusCode = $response->getStatusCode();
+            if ($statusCode !== 200) {
+                error_log('[MSGraphClient] Graph request failed with status ' . $statusCode);
+                return [];
+            }
+
+            $body = (string)$response->getBody();
+            $data = json_decode($body, true);
+
+            return is_array($data) ? $data : [];
+        } catch (GuzzleException $e) {
+            error_log('[MSGraphClient] Graph request error: ' . $e->getMessage());
+            return [];
+        } catch (\Throwable $e) {
+            error_log('[MSGraphClient] Unexpected error in Graph request: ' . $e->getMessage());
+            return [];
+        }
     }
 
     /**
-     * Build UsersRequestBuilder query parameters with `$select`, `$expand`, and paging.
+     * Fetch a page from Microsoft Graph using an absolute URL (nextLink).
      *
-     * @param string $filter OData filter expression.
-     * @return UsersRequestBuilderGetQueryParameters
+     * @param string $url Absolute URL from @odata.nextLink
+     * @return array Decoded JSON response, or empty array on error
      */
-    private function getQueryParams($filter)
+    private function fetchGraphPageByUrl(string $url): array
     {
-        return new UsersRequestBuilderGetQueryParameters(
-            select: $this->attributes,
-            filter: $filter,
-            count: false,
-            expand: ['manager($select=id,displayName,mail,userPrincipalName)'],
-            top: 10
-        );
-    }
+        // Get (or refresh) the access token from system settings
+        $accessToken = $this->getAccessToken();
+        if (!$accessToken) {
+            error_log('[MSGraphClient] Failed to get access token for Graph request.');
+            return [];
+        }
 
-    /**
-     * Build UsersRequestBuilder query parameters for advanced filters (e.g., companyName) without $expand.
-     *
-     * Advanced directory queries require $count=true and ConsistencyLevel: eventual.
-     *
-     * @param string $filter OData filter expression.
-     * @return UsersRequestBuilderGetQueryParameters
-     */
-    private function getAdvancedQueryParams(?string $search, ?string $filter)
-    {
-        return new UsersRequestBuilderGetQueryParameters(
-            select: $this->attributes,
-            search: $search,
-            filter: $filter,
-            count: true,
-            top: 10
-        );
+        $headers = [
+            'Authorization' => 'Bearer ' . $accessToken,
+            'Accept' => 'application/json',
+            'Content-Type' => 'application/json',
+            'ConsistencyLevel' => 'eventual',
+        ];
+
+        $http = new GuzzleClient([
+            'timeout' => 10.0,
+            'connect_timeout' => 5.0,
+        ]);
+
+        try {
+            $response = $http->get($url, ['headers' => $headers]);
+
+            $statusCode = $response->getStatusCode();
+            if ($statusCode !== 200) {
+                error_log('[MSGraphClient] Graph request failed with status ' . $statusCode);
+                return [];
+            }
+
+            $body = (string)$response->getBody();
+            $data = json_decode($body, true);
+
+            return is_array($data) ? $data : [];
+        } catch (GuzzleException $e) {
+            error_log('[MSGraphClient] Graph request error: ' . $e->getMessage());
+            return [];
+        } catch (\Throwable $e) {
+            error_log('[MSGraphClient] Unexpected error in Graph request: ' . $e->getMessage());
+            return [];
+        }
     }
 
     /**
@@ -315,6 +328,40 @@ class MSGraphClient
 
 
     /**
+     * Compute mailNickname based on Stanford org rules:
+     * - Stanford University or Stanford Children's Health: username part of `mail`
+     * - Stanford Health Care: username part of `userPrincipalName`
+     */
+    private function computeMailNickname(?string $companyName, ?string $mail, ?string $userPrincipalName): ?string
+    {
+        $company = trim((string)($companyName ?? ''));
+
+        $source = null;
+        if ($company === 'Stanford University' || $company === "Stanford Children's Health") {
+            $source = $mail;
+        } elseif ($company === 'Stanford Health Care') {
+            $source = $userPrincipalName;
+        } else {
+            // Fallback: prefer mail, then UPN
+            $source = $mail ?: $userPrincipalName;
+        }
+
+        $source = trim((string)($source ?? ''));
+        if ($source === '') {
+            return null;
+        }
+
+        $atPos = strpos($source, '@');
+        if ($atPos === false) {
+            return $source;
+        }
+
+        $username = substr($source, 0, $atPos);
+        $username = trim((string)$username);
+        return $username !== '' ? $username : null;
+    }
+
+    /**
      * Execute a users query given a Graph $search expression, optional nextLink for pagination, and optional companyName filter.
      *
      * Always uses advanced query params: $search, $filter (companyName), $count=true, ConsistencyLevel.
@@ -364,178 +411,152 @@ class MSGraphClient
 
     public function getUsersByFilter($search, $nextLink, $companyFilter = null)
     {
-        $graphClient = $this->getGraphClient();
-
-        // Use advanced query params (no $expand, $count=true, ConsistencyLevel) for $search + optional company filter
-        $useAdvanced = true;
-        $queryParams = $this->getAdvancedQueryParams($search, $companyFilter);
-
-        $requestConfig = new UsersRequestBuilderGetRequestConfiguration();
-        $requestConfig->queryParameters = $queryParams;
-        $requestConfig->headers = ['ConsistencyLevel' => 'eventual'];
+        $response = null;
 
         if (!is_null($nextLink)) {
-            // Use a raw RequestInformation against the absolute nextLink URL.
-            // This bypasses SDK query-parameter gaps (e.g., missing skiptoken property).
-            $requestInfo = new RequestInformation();
-            $requestInfo->httpMethod = HttpMethod::GET;
-            $requestInfo->urlTemplate = $nextLink;  // absolute URL
-            $requestInfo->pathParameters = [];
-            $headers = ['Accept' => 'application/json'];
-            if ($useAdvanced) {
-                $headers['ConsistencyLevel'] = 'eventual';
-            }
-            $requestInfo->addHeaders($headers);
-
-            // Send and parse into a UserCollectionResponse
-            $response = $graphClient->getRequestAdapter()
-                ->sendAsync($requestInfo, [UserCollectionResponse::class, 'createFromDiscriminatorValue'])
-                ->wait();
+            // Use the nextLink directly - it contains all necessary query params
+            $response = $this->fetchGraphPageByUrl($nextLink);
         } else {
-            // First page
-            $response = $graphClient->users()->get($requestConfig)->wait();
+            // First page - build OData query params
+            $queryParams = [
+                '$search' => $search,
+                '$count' => 'true',
+                '$top' => '10',
+            ];
+
+            if (!empty($companyFilter)) {
+                $queryParams['$filter'] = $companyFilter;
+            }
+
+            $queryParams['$select'] = implode(',', $this->attributes);
+
+            $response = $this->graphGetRequest('/users', $queryParams, ['ConsistencyLevel' => 'eventual']);
+        }
+
+        if (empty($response)) {
+            return [
+                'count' => null,
+                'users' => [],
+                'preview' => [],
+                'nextLink' => null,
+                'prevLink' => null,
+                '@odata.nextLink' => null,
+            ];
         }
 
         $image = $this->module->getUrl('ajax/get_user_photo.php', true, true);
         $managerURL = $this->module->getUrl('ajax/get_user_manager.php', true, true);
         $users = [];
-        foreach ($response->getValue() as $user) {
+
+        // Get users array from response
+        $usersList = $response['value'] ?? [];
+        foreach ($usersList as $user) {
             // Collections / complex types with safe normalization
-            $businessPhones = $user->getBusinessPhones() ?: [];
+            $businessPhones = $user['businessPhones'] ?? [];
 
+            // identities array
             $identities = [];
-            if (method_exists($user, 'getIdentities') && $user->getIdentities()) {
-                foreach ($user->getIdentities() as $idn) {
+            if (isset($user['identities']) && is_array($user['identities'])) {
+                foreach ($user['identities'] as $idn) {
                     $identities[] = [
-                        'signInType' => method_exists($idn, 'getSignInType') ? $idn->getSignInType() : null,
-                        'issuer' => method_exists($idn, 'getIssuer') ? $idn->getIssuer() : null,
-                        'issuerAssignedId' => method_exists($idn, 'getIssuerAssignedId') ? $idn->getIssuerAssignedId() : null,
+                        'signInType' => $idn['signInType'] ?? null,
+                        'issuer' => $idn['issuer'] ?? null,
+                        'issuerAssignedId' => $idn['issuerAssignedId'] ?? null,
                     ];
                 }
             }
 
+            // assignedLicenses array
             $assignedLicenses = [];
-            if (method_exists($user, 'getAssignedLicenses') && $user->getAssignedLicenses()) {
-                foreach ($user->getAssignedLicenses() as $lic) {
+            if (isset($user['assignedLicenses']) && is_array($user['assignedLicenses'])) {
+                foreach ($user['assignedLicenses'] as $lic) {
                     $assignedLicenses[] = [
-                        'skuId' => method_exists($lic, 'getSkuId') ? (string)$lic->getSkuId() : null,
-                        'disabledPlans' => method_exists($lic, 'getDisabledPlans') ? array_map('strval', $lic->getDisabledPlans()) : [],
+                        'skuId' => $lic['skuId'] ?? null,
+                        'disabledPlans' => $lic['disabledPlans'] ?? [],
                     ];
                 }
             }
 
+            // assignedPlans array
             $assignedPlans = [];
-            if (method_exists($user, 'getAssignedPlans') && $user->getAssignedPlans()) {
-                foreach ($user->getAssignedPlans() as $pl) {
+            if (isset($user['assignedPlans']) && is_array($user['assignedPlans'])) {
+                foreach ($user['assignedPlans'] as $pl) {
                     $assignedPlans[] = [
-                        'service' => method_exists($pl, 'getService') ? $pl->getService() : null,
-                        'servicePlanId' => method_exists($pl, 'getServicePlanId') ? (string)$pl->getServicePlanId() : null,
-                        'capabilityStatus' => method_exists($pl, 'getCapabilityStatus') ? $pl->getCapabilityStatus() : null,
-                        'assignedDateTime' => method_exists($pl, 'getAssignedDateTime') && $pl->getAssignedDateTime() ? $pl->getAssignedDateTime()->format(DATE_ATOM) : null,
+                        'service' => $pl['service'] ?? null,
+                        'servicePlanId' => $pl['servicePlanId'] ?? null,
+                        'capabilityStatus' => $pl['capabilityStatus'] ?? null,
+                        'assignedDateTime' => $pl['assignedDateTime'] ?? null,
                     ];
                 }
             }
 
+            // onPremisesExtensionAttributes
             $onPremExt = null;
-            if (method_exists($user, 'getOnPremisesExtensionAttributes') && $user->getOnPremisesExtensionAttributes()) {
-                $ext = $user->getOnPremisesExtensionAttributes();
-                $onPremExt = [];
-                for ($i = 1; $i <= 15; $i++) {
-                    $getter = 'getExtensionAttribute' . $i;
-                    $onPremExt['extensionAttribute' . $i] = method_exists($ext, $getter) ? $ext->$getter() : null;
-                }
+            if (isset($user['onPremisesExtensionAttributes']) && is_array($user['onPremisesExtensionAttributes'])) {
+                $onPremExt = $user['onPremisesExtensionAttributes'];
             }
 
-            // Manager (from $expand) — best effort across SDK versions
-            // Manager
-            $manager = null;
-            if (!$useAdvanced) {
-                // When not using advanced filter, get manager via $expand (if available)
-                if (method_exists($user, 'getManager') && $user->getManager()) {
-                    $mgr = $user->getManager();
-                    $manager = [
-                        'id' => method_exists($mgr, 'getId') ? $mgr->getId() : null,
-                        'displayName' => method_exists($mgr, 'getDisplayName') ? $mgr->getDisplayName() : null,
-                        'mail' => method_exists($mgr, 'getMail') ? $mgr->getMail() : null,
-                        'userPrincipalName' => method_exists($mgr, 'getUserPrincipalName') ? $mgr->getUserPrincipalName() : null,
-                    ];
-                } elseif (method_exists($user, 'getAdditionalData')) {
-                    $ad = $user->getAdditionalData();
-                    if (isset($ad['manager']) && is_array($ad['manager'])) {
-                        $manager = [
-                            'id' => $ad['manager']['id'] ?? null,
-                            'displayName' => $ad['manager']['displayName'] ?? null,
-                            'mail' => $ad['manager']['mail'] ?? null,
-                            'userPrincipalName' => $ad['manager']['userPrincipalName'] ?? null,
-                        ];
-                    }
-                }
-            }
+            // Manager (from $expand)
+            $manager = $user['manager'] ?? null;
 
-            // Additional raw fields (appear via additionalData if not strongly typed)
-            $principal = null;
-            $alternativeSecurityIds = null;
-            $isSoftDeleted = null;
-            if (method_exists($user, 'getAdditionalData')) {
-                $ad = $user->getAdditionalData();
-                $principal = $ad['principal'] ?? null;
-                $alternativeSecurityIds = $ad['alternativeSecurityIds'] ?? null;
-                $isSoftDeleted = $ad['IsSoftDeleted'] ?? ($ad['isSoftDeleted'] ?? null);
-            }
+            // Additional fields
+            $principal = $user['principal'] ?? null;
+            $alternativeSecurityIds = $user['alternativeSecurityIds'] ?? null;
+            $isSoftDeleted = $user['IsSoftDeleted'] ?? ($user['isSoftDeleted'] ?? null);
 
-            $companyNameVal = $user->getCompanyName();
-            $mailVal = $user->getMail();
-            $upnVal = $user->getUserPrincipalName();
+            $companyNameVal = $user['companyName'] ?? null;
+            $mailVal = $user['mail'] ?? null;
+            $upnVal = $user['userPrincipalName'] ?? null;
             $effectiveMailNickname = $this->computeMailNickname($companyNameVal, $mailVal, $upnVal);
 
             $normalizedUser = [
-                'id' => $user->getId(),
-                'displayName' => $user->getDisplayName(),
-                'givenName' => $user->getGivenName(),
-                'surname' => $user->getSurname(),
-                'mail' => $user->getMail(),
-                'userPrincipalName' => $user->getUserPrincipalName(),
-                'accountEnabled' => $user->getAccountEnabled(),
-                'jobTitle' => $user->getJobTitle(),
-                'department' => $user->getDepartment(),
-                'companyName' => $user->getCompanyName(),
-                'officeLocation' => $user->getOfficeLocation(),
+                'id' => $user['id'] ?? null,
+                'displayName' => $user['displayName'] ?? null,
+                'givenName' => $user['givenName'] ?? null,
+                'surname' => $user['surname'] ?? null,
+                'mail' => $user['mail'] ?? null,
+                'userPrincipalName' => $user['userPrincipalName'] ?? null,
+                'accountEnabled' => $user['accountEnabled'] ?? null,
+                'jobTitle' => $user['jobTitle'] ?? null,
+                'department' => $user['department'] ?? null,
+                'companyName' => $user['companyName'] ?? null,
+                'officeLocation' => $user['officeLocation'] ?? null,
                 'businessPhones' => $businessPhones,
-                'mobilePhone' => $user->getMobilePhone(),
-                'preferredLanguage' => $user->getPreferredLanguage(),
+                'mobilePhone' => $user['mobilePhone'] ?? null,
+                'preferredLanguage' => $user['preferredLanguage'] ?? null,
                 'identities' => $identities,
-                'otherMails' => method_exists($user, 'getOtherMails') && $user->getOtherMails() ? $user->getOtherMails() : [],
+                'otherMails' => $user['otherMails'] ?? [],
                 'mailNickname' => $effectiveMailNickname,
-                'usageLocation' => $user->getUsageLocation(),
-                'createdDateTime' => $user->getCreatedDateTime() ? $user->getCreatedDateTime()->format(DATE_ATOM) : null,
+                'usageLocation' => $user['usageLocation'] ?? null,
+                'createdDateTime' => $user['createdDateTime'] ?? null,
                 'assignedLicenses' => $assignedLicenses,
                 'assignedPlans' => $assignedPlans,
                 'onPremisesExtensionAttributes' => $onPremExt,
-                'streetAddress' => $user->getStreetAddress(),
-                'city' => $user->getCity(),
-                'state' => $user->getState(),
-                'postalCode' => $user->getPostalCode(),
-                'country' => $user->getCountry(),
-                'physicalDeliveryOfficeName' => method_exists($user, 'getPhysicalDeliveryOfficeName') ? $user->getPhysicalDeliveryOfficeName() : null,
-                'telephoneNumber' => method_exists($user, 'getTelephoneNumber') ? $user->getTelephoneNumber() : null,
-                'userType' => $user->getUserType(),
-                'showInAddressList' => method_exists($user, 'getShowInAddressList') ? $user->getShowInAddressList() : null,
+                'streetAddress' => $user['streetAddress'] ?? null,
+                'city' => $user['city'] ?? null,
+                'state' => $user['state'] ?? null,
+                'postalCode' => $user['postalCode'] ?? null,
+                'country' => $user['country'] ?? null,
+                'physicalDeliveryOfficeName' => $user['physicalDeliveryOfficeName'] ?? null,
+                'telephoneNumber' => $user['telephoneNumber'] ?? null,
+                'userType' => $user['userType'] ?? null,
+                'showInAddressList' => $user['showInAddressList'] ?? null,
                 'manager' => $manager,
                 'principal' => $principal,
                 'alternativeSecurityIds' => $alternativeSecurityIds,
                 'IsSoftDeleted' => $isSoftDeleted,
-                'photoUrl' => $image . '&user_id=' . urlencode($user->getId()) . '&size=120x120',
-                'managerURL' => $managerURL . '&user_id=' . urlencode($user->getId()),
+                'photoUrl' => $image . '&user_id=' . urlencode($user['id'] ?? '') . '&size=120x120',
+                'managerURL' => $managerURL . '&user_id=' . urlencode($user['id'] ?? ''),
                 // backward compatibility with OneDirectory fields
-                'OneDirectoryId' => $user->getId(),
-                'affiliate' => $user->getCompanyName(),
+                'OneDirectoryId' => $user['id'] ?? null,
+                'affiliate' => $user['companyName'] ?? null,
                 'jobId' => '',
-                'first_name' => $user->getGivenName(),
-                'last_name' => $user->getSurname(),
-                'fullname' => $user->getDisplayName(),
-                'phone' => $user->getMobilePhone() ?: (isset($businessPhones[0]) ? $businessPhones[0] : null),
-                'email' => $user->getMail(),
-                'title' => $user->getJobTitle(),
+                'first_name' => $user['givenName'] ?? null,
+                'last_name' => $user['surname'] ?? null,
+                'fullname' => $user['displayName'] ?? null,
+                'phone' => $user['mobilePhone'] ?? (isset($businessPhones[0]) ? $businessPhones[0] : null),
+                'email' => $user['mail'] ?? null,
+                'title' => $user['jobTitle'] ?? null,
                 'suid' => $effectiveMailNickname,
             ];
 
@@ -557,10 +578,10 @@ class MSGraphClient
 //            $users = $this->attachManagers($users);
 //        }
 
-        $prevLinkVar = $nextLink ?: null;              // the link the client just used (if any)
-        $nextLinkVar = $response->getOdataNextLink();  // the link for the next page (from Graph)
+        $prevLinkVar = $nextLink ?: null;
+        $nextLinkVar = $response['@odata.nextLink'] ?? null;
         return [
-            'count' => $response->getOdataCount(),
+            'count' => $response['@odata.count'] ?? null,
             'users' => $users,
             'preview' => $this->createUserPreview($users),
             'nextLink' => $nextLinkVar,
@@ -573,9 +594,6 @@ class MSGraphClient
     /**
      * Populate the `manager` field for each user by calling the `/users/{id}/manager` endpoint.
      *
-     * Manager calls use the async Graph SDK API under the hood; we wait on each promise so
-     * the calling code receives a fully-populated array.
-     *
      * @param array $users Normalized users from getUsersByFilter().
      * @return array Users with `manager` populated when available.
      */
@@ -585,19 +603,24 @@ class MSGraphClient
             return $users;
         }
 
-        $graphClient = $this->getGraphClient();
-
         foreach ($users as &$user) {
             $manager = null;
             try {
-                // Kiota SDK returns a promise; we call wait() to resolve it.
-                $mgrObj = $graphClient->users()->byUserId($user['id'])->manager()->get()->wait();
-                if ($mgrObj) {
+                if (empty($user['id'])) {
+                    continue;
+                }
+
+                // Fetch manager info directly from Graph API
+                $managerData = $this->graphGetRequest('/users/' . urlencode($user['id']) . '/manager', [
+                    '$select' => 'id,displayName,mail,userPrincipalName'
+                ]);
+
+                if (!empty($managerData)) {
                     $manager = [
-                        'id' => method_exists($mgrObj, 'getId') ? $mgrObj->getId() : null,
-                        'displayName' => method_exists($mgrObj, 'getDisplayName') ? $mgrObj->getDisplayName() : null,
-                        'mail' => method_exists($mgrObj, 'getMail') ? $mgrObj->getMail() : null,
-                        'userPrincipalName' => method_exists($mgrObj, 'getUserPrincipalName') ? $mgrObj->getUserPrincipalName() : null,
+                        'id' => $managerData['id'] ?? null,
+                        'displayName' => $managerData['displayName'] ?? null,
+                        'mail' => $managerData['mail'] ?? null,
+                        'userPrincipalName' => $managerData['userPrincipalName'] ?? null,
                     ];
                 }
             } catch (\Throwable $e) {
@@ -679,10 +702,37 @@ class MSGraphClient
     }
 
     /**
+     * Load credentials from Google Secret Manager on demand.
+     * Credentials are loaded only once and cached in instance variables.
+     *
+     * @return bool True if credentials were loaded successfully, false otherwise.
+     */
+    private function loadCredentialsIfNeeded(): bool
+    {
+        // Only load if not already loaded
+        if ($this->tenantId !== null && $this->clientId !== null && $this->clientSecret !== null) {
+            return true;
+        }
+
+        try {
+            $this->tenantId = $this->secretManager->getSecret(self::MS_GRAPH_TENANT_ID);
+            $this->clientId = $this->secretManager->getSecret(self::MS_GRAPH_CLIENT_ID);
+            $this->clientSecret = $this->secretManager->getSecret(self::MS_GRAPH_CLIENT_SECRET);
+            return true;
+        } catch (ApiException $e) {
+            error_log('[MSGraphClient] Failed to load credentials from Google Secret Manager: ' . $e->getMessage());
+            return false;
+        } catch (\Throwable $e) {
+            error_log('[MSGraphClient] Unexpected error loading credentials: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Acquire and cache an app-only access token for Microsoft Graph via OAuth2 client credentials.
      *
      * The token is fetched from `https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token`
-     * with scope `https://graph.microsoft.com/.default`, cached in-memory, and reused until
+     * with scope `https://graph.microsoft.com/.default`, cached in system settings, and reused until
      * 60 seconds before expiration.
      *
      * @return string|null Bearer access token, or null if retrieval fails.
@@ -690,11 +740,24 @@ class MSGraphClient
     public function getAccessToken(): ?string
     {
         $now = time();
-        if ($this->accessToken && ($this->accessTokenExpiresAt - 60) > $now) {
-            return $this->accessToken;
+
+        // Check for cached token in system settings
+        $cachedToken = $this->module->getSystemSetting('microsoft-graph-access-token');
+        $tokenExpirationTs = $this->module->getSystemSetting('microsoft-graph-access-token-expiration-timestamp');
+
+        // If token exists and is not expired (with 60-second safety window), return it
+        if ($cachedToken && $tokenExpirationTs) {
+            $tokenExpirationTs = (int)$tokenExpirationTs;
+            if (($tokenExpirationTs - 60) > $now) {
+                return $cachedToken;
+            }
         }
 
-        // Load credentials from Secret Manager
+        // Load credentials from Google Secret Manager only when needed
+        if (!$this->loadCredentialsIfNeeded()) {
+            return null;
+        }
+
         $tenantId = trim($this->tenantId);
         $clientId = trim($this->clientId);
         $clientSecret = $this->clientSecret;
@@ -733,10 +796,20 @@ class MSGraphClient
                 error_log('[MSGraphClient] Token response missing access_token: ' . substr($body, 0, 500));
                 return null;
             }
-            $this->accessToken = $json['access_token'];
+
+            $token = $json['access_token'];
             $expiresIn = isset($json['expires_in']) ? (int)$json['expires_in'] : 3600;
-            $this->accessTokenExpiresAt = $now + max(300, $expiresIn);
-            return $this->accessToken;
+            $expirationTs = $now + max(300, $expiresIn);
+
+            // Save token and expiration to system settings
+            $this->module->setSystemSetting('microsoft-graph-access-token', $token);
+            $this->module->setSystemSetting('microsoft-graph-access-token-expiration-timestamp', (string)$expirationTs);
+
+            // Also update in-memory cache for this request
+            $this->accessToken = $token;
+            $this->accessTokenExpiresAt = (int)$expirationTs;
+
+            return $token;
         } catch (GuzzleException $e) {
             error_log('[MSGraphClient] Token request error: ' . $e->getMessage());
             return null;
