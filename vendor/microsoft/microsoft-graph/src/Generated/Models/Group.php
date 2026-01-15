@@ -334,6 +334,7 @@ class Group extends DirectoryObject implements Parsable
             'onPremisesProvisioningErrors' => fn(ParseNode $n) => $o->setOnPremisesProvisioningErrors($n->getCollectionOfObjectValues([OnPremisesProvisioningError::class, 'createFromDiscriminatorValue'])),
             'onPremisesSamAccountName' => fn(ParseNode $n) => $o->setOnPremisesSamAccountName($n->getStringValue()),
             'onPremisesSecurityIdentifier' => fn(ParseNode $n) => $o->setOnPremisesSecurityIdentifier($n->getStringValue()),
+            'onPremisesSyncBehavior' => fn(ParseNode $n) => $o->setOnPremisesSyncBehavior($n->getObjectValue([OnPremisesSyncBehavior::class, 'createFromDiscriminatorValue'])),
             'onPremisesSyncEnabled' => fn(ParseNode $n) => $o->setOnPremisesSyncEnabled($n->getBooleanValue()),
             'owners' => fn(ParseNode $n) => $o->setOwners($n->getCollectionOfObjectValues([DirectoryObject::class, 'createFromDiscriminatorValue'])),
             'permissionGrants' => fn(ParseNode $n) => $o->setPermissionGrants($n->getCollectionOfObjectValues([ResourceSpecificPermissionGrant::class, 'createFromDiscriminatorValue'])),
@@ -681,6 +682,18 @@ class Group extends DirectoryObject implements Parsable
     }
 
     /**
+     * Gets the onPremisesSyncBehavior property value. The onPremisesSyncBehavior property
+     * @return OnPremisesSyncBehavior|null
+    */
+    public function getOnPremisesSyncBehavior(): ?OnPremisesSyncBehavior {
+        $val = $this->getBackingStore()->get('onPremisesSyncBehavior');
+        if (is_null($val) || $val instanceof OnPremisesSyncBehavior) {
+            return $val;
+        }
+        throw new \UnexpectedValueException("Invalid type found in backing store for 'onPremisesSyncBehavior'");
+    }
+
+    /**
      * Gets the onPremisesSyncEnabled property value. true if this group is synced from an on-premises directory; false if this group was originally synced from an on-premises directory but is no longer synced; null if this object has never synced from an on-premises directory (default). Returned by default. Read-only. Supports $filter (eq, ne, not, in, and eq on null values).
      * @return bool|null
     */
@@ -979,7 +992,7 @@ class Group extends DirectoryObject implements Parsable
     }
 
     /**
-     * Gets the visibility property value. Specifies the group join policy and group content visibility for groups. Possible values are: Private, Public, or HiddenMembership. HiddenMembership can be set only for Microsoft 365 groups when the groups are created. It can't be updated later. Other values of visibility can be updated after group creation. If visibility value isn't specified during group creation on Microsoft Graph, a security group is created as Private by default, and the Microsoft 365 group is Public. Groups assignable to roles are always Private. To learn more, see group visibility options. Returned by default. Nullable.
+     * Gets the visibility property value. Specifies the group join policy and group content visibility for groups. The possible values are: Private, Public, or HiddenMembership. HiddenMembership can be set only for Microsoft 365 groups when the groups are created. It can't be updated later. Other values of visibility can be updated after group creation. If visibility value isn't specified during group creation on Microsoft Graph, a security group is created as Private by default, and the Microsoft 365 group is Public. Groups assignable to roles are always Private. To learn more, see group visibility options. Returned by default. Nullable.
      * @return string|null
     */
     public function getVisibility(): ?string {
@@ -1040,6 +1053,7 @@ class Group extends DirectoryObject implements Parsable
         $writer->writeCollectionOfObjectValues('onPremisesProvisioningErrors', $this->getOnPremisesProvisioningErrors());
         $writer->writeStringValue('onPremisesSamAccountName', $this->getOnPremisesSamAccountName());
         $writer->writeStringValue('onPremisesSecurityIdentifier', $this->getOnPremisesSecurityIdentifier());
+        $writer->writeObjectValue('onPremisesSyncBehavior', $this->getOnPremisesSyncBehavior());
         $writer->writeBooleanValue('onPremisesSyncEnabled', $this->getOnPremisesSyncEnabled());
         $writer->writeCollectionOfObjectValues('owners', $this->getOwners());
         $writer->writeCollectionOfObjectValues('permissionGrants', $this->getPermissionGrants());
@@ -1419,6 +1433,14 @@ class Group extends DirectoryObject implements Parsable
     }
 
     /**
+     * Sets the onPremisesSyncBehavior property value. The onPremisesSyncBehavior property
+     * @param OnPremisesSyncBehavior|null $value Value to set for the onPremisesSyncBehavior property.
+    */
+    public function setOnPremisesSyncBehavior(?OnPremisesSyncBehavior $value): void {
+        $this->getBackingStore()->set('onPremisesSyncBehavior', $value);
+    }
+
+    /**
      * Sets the onPremisesSyncEnabled property value. true if this group is synced from an on-premises directory; false if this group was originally synced from an on-premises directory but is no longer synced; null if this object has never synced from an on-premises directory (default). Returned by default. Read-only. Supports $filter (eq, ne, not, in, and eq on null values).
      * @param bool|null $value Value to set for the onPremisesSyncEnabled property.
     */
@@ -1603,7 +1625,7 @@ class Group extends DirectoryObject implements Parsable
     }
 
     /**
-     * Sets the visibility property value. Specifies the group join policy and group content visibility for groups. Possible values are: Private, Public, or HiddenMembership. HiddenMembership can be set only for Microsoft 365 groups when the groups are created. It can't be updated later. Other values of visibility can be updated after group creation. If visibility value isn't specified during group creation on Microsoft Graph, a security group is created as Private by default, and the Microsoft 365 group is Public. Groups assignable to roles are always Private. To learn more, see group visibility options. Returned by default. Nullable.
+     * Sets the visibility property value. Specifies the group join policy and group content visibility for groups. The possible values are: Private, Public, or HiddenMembership. HiddenMembership can be set only for Microsoft 365 groups when the groups are created. It can't be updated later. Other values of visibility can be updated after group creation. If visibility value isn't specified during group creation on Microsoft Graph, a security group is created as Private by default, and the Microsoft 365 group is Public. Groups assignable to roles are always Private. To learn more, see group visibility options. Returned by default. Nullable.
      * @param string|null $value Value to set for the visibility property.
     */
     public function setVisibility(?string $value): void {

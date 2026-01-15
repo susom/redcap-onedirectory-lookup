@@ -5,7 +5,6 @@ namespace Microsoft\Graph\Generated\Models;
 use Microsoft\Kiota\Abstractions\Serialization\Parsable;
 use Microsoft\Kiota\Abstractions\Serialization\ParseNode;
 use Microsoft\Kiota\Abstractions\Serialization\SerializationWriter;
-use Microsoft\Kiota\Abstractions\Types\TypeUtils;
 
 class Room extends Place implements Parsable 
 {
@@ -39,7 +38,7 @@ class Room extends Place implements Parsable
     }
 
     /**
-     * Gets the bookingType property value. Type of room. Possible values are standard, and reserved.
+     * Gets the bookingType property value. Type of room. Possible values are: unknown, standard, reserved.
      * @return BookingType|null
     */
     public function getBookingType(): ?BookingType {
@@ -113,17 +112,9 @@ class Room extends Place implements Parsable
             'emailAddress' => fn(ParseNode $n) => $o->setEmailAddress($n->getStringValue()),
             'floorLabel' => fn(ParseNode $n) => $o->setFloorLabel($n->getStringValue()),
             'floorNumber' => fn(ParseNode $n) => $o->setFloorNumber($n->getIntegerValue()),
-            'isWheelChairAccessible' => fn(ParseNode $n) => $o->setIsWheelChairAccessible($n->getBooleanValue()),
-            'label' => fn(ParseNode $n) => $o->setLabel($n->getStringValue()),
             'nickname' => fn(ParseNode $n) => $o->setNickname($n->getStringValue()),
-            'tags' => function (ParseNode $n) {
-                $val = $n->getCollectionOfPrimitiveValues();
-                if (is_array($val)) {
-                    TypeUtils::validateCollectionValues($val, 'string');
-                }
-                /** @var array<string>|null $val */
-                $this->setTags($val);
-            },
+            'placeId' => fn(ParseNode $n) => $o->setPlaceId($n->getStringValue()),
+            'teamsEnabledState' => fn(ParseNode $n) => $o->setTeamsEnabledState($n->getEnumValue(PlaceFeatureEnablement::class)),
             'videoDeviceName' => fn(ParseNode $n) => $o->setVideoDeviceName($n->getStringValue()),
         ]);
     }
@@ -153,30 +144,6 @@ class Room extends Place implements Parsable
     }
 
     /**
-     * Gets the isWheelChairAccessible property value. Specifies whether the room is wheelchair accessible.
-     * @return bool|null
-    */
-    public function getIsWheelChairAccessible(): ?bool {
-        $val = $this->getBackingStore()->get('isWheelChairAccessible');
-        if (is_null($val) || is_bool($val)) {
-            return $val;
-        }
-        throw new \UnexpectedValueException("Invalid type found in backing store for 'isWheelChairAccessible'");
-    }
-
-    /**
-     * Gets the label property value. Specifies a descriptive label for the room, for example, a number or name.
-     * @return string|null
-    */
-    public function getLabel(): ?string {
-        $val = $this->getBackingStore()->get('label');
-        if (is_null($val) || is_string($val)) {
-            return $val;
-        }
-        throw new \UnexpectedValueException("Invalid type found in backing store for 'label'");
-    }
-
-    /**
      * Gets the nickname property value. Specifies a nickname for the room, for example, 'conf room'.
      * @return string|null
     */
@@ -189,17 +156,27 @@ class Room extends Place implements Parsable
     }
 
     /**
-     * Gets the tags property value. Specifies other features of the room, for example, details like the type of view or furniture type.
-     * @return array<string>|null
+     * Gets the placeId property value. An alternative immutable unique identifier of the room. Read-only.
+     * @return string|null
     */
-    public function getTags(): ?array {
-        $val = $this->getBackingStore()->get('tags');
-        if (is_array($val) || is_null($val)) {
-            TypeUtils::validateCollectionValues($val, 'string');
-            /** @var array<string>|null $val */
+    public function getPlaceId(): ?string {
+        $val = $this->getBackingStore()->get('placeId');
+        if (is_null($val) || is_string($val)) {
             return $val;
         }
-        throw new \UnexpectedValueException("Invalid type found in backing store for 'tags'");
+        throw new \UnexpectedValueException("Invalid type found in backing store for 'placeId'");
+    }
+
+    /**
+     * Gets the teamsEnabledState property value. The teamsEnabledState property
+     * @return PlaceFeatureEnablement|null
+    */
+    public function getTeamsEnabledState(): ?PlaceFeatureEnablement {
+        $val = $this->getBackingStore()->get('teamsEnabledState');
+        if (is_null($val) || $val instanceof PlaceFeatureEnablement) {
+            return $val;
+        }
+        throw new \UnexpectedValueException("Invalid type found in backing store for 'teamsEnabledState'");
     }
 
     /**
@@ -228,10 +205,9 @@ class Room extends Place implements Parsable
         $writer->writeStringValue('emailAddress', $this->getEmailAddress());
         $writer->writeStringValue('floorLabel', $this->getFloorLabel());
         $writer->writeIntegerValue('floorNumber', $this->getFloorNumber());
-        $writer->writeBooleanValue('isWheelChairAccessible', $this->getIsWheelChairAccessible());
-        $writer->writeStringValue('label', $this->getLabel());
         $writer->writeStringValue('nickname', $this->getNickname());
-        $writer->writeCollectionOfPrimitiveValues('tags', $this->getTags());
+        $writer->writeStringValue('placeId', $this->getPlaceId());
+        $writer->writeEnumValue('teamsEnabledState', $this->getTeamsEnabledState());
         $writer->writeStringValue('videoDeviceName', $this->getVideoDeviceName());
     }
 
@@ -244,7 +220,7 @@ class Room extends Place implements Parsable
     }
 
     /**
-     * Sets the bookingType property value. Type of room. Possible values are standard, and reserved.
+     * Sets the bookingType property value. Type of room. Possible values are: unknown, standard, reserved.
      * @param BookingType|null $value Value to set for the bookingType property.
     */
     public function setBookingType(?BookingType $value): void {
@@ -300,22 +276,6 @@ class Room extends Place implements Parsable
     }
 
     /**
-     * Sets the isWheelChairAccessible property value. Specifies whether the room is wheelchair accessible.
-     * @param bool|null $value Value to set for the isWheelChairAccessible property.
-    */
-    public function setIsWheelChairAccessible(?bool $value): void {
-        $this->getBackingStore()->set('isWheelChairAccessible', $value);
-    }
-
-    /**
-     * Sets the label property value. Specifies a descriptive label for the room, for example, a number or name.
-     * @param string|null $value Value to set for the label property.
-    */
-    public function setLabel(?string $value): void {
-        $this->getBackingStore()->set('label', $value);
-    }
-
-    /**
      * Sets the nickname property value. Specifies a nickname for the room, for example, 'conf room'.
      * @param string|null $value Value to set for the nickname property.
     */
@@ -324,11 +284,19 @@ class Room extends Place implements Parsable
     }
 
     /**
-     * Sets the tags property value. Specifies other features of the room, for example, details like the type of view or furniture type.
-     * @param array<string>|null $value Value to set for the tags property.
+     * Sets the placeId property value. An alternative immutable unique identifier of the room. Read-only.
+     * @param string|null $value Value to set for the placeId property.
     */
-    public function setTags(?array $value): void {
-        $this->getBackingStore()->set('tags', $value);
+    public function setPlaceId(?string $value): void {
+        $this->getBackingStore()->set('placeId', $value);
+    }
+
+    /**
+     * Sets the teamsEnabledState property value. The teamsEnabledState property
+     * @param PlaceFeatureEnablement|null $value Value to set for the teamsEnabledState property.
+    */
+    public function setTeamsEnabledState(?PlaceFeatureEnablement $value): void {
+        $this->getBackingStore()->set('teamsEnabledState', $value);
     }
 
     /**

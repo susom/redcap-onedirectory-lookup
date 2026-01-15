@@ -27,6 +27,18 @@ class FileStorageContainer extends Entity implements Parsable
     }
 
     /**
+     * Gets the assignedSensitivityLabel property value. Sensitivity label assigned to the fileStorageContainer. Read-write.
+     * @return AssignedLabel|null
+    */
+    public function getAssignedSensitivityLabel(): ?AssignedLabel {
+        $val = $this->getBackingStore()->get('assignedSensitivityLabel');
+        if (is_null($val) || $val instanceof AssignedLabel) {
+            return $val;
+        }
+        throw new \UnexpectedValueException("Invalid type found in backing store for 'assignedSensitivityLabel'");
+    }
+
+    /**
      * Gets the columns property value. The columns property
      * @return array<ColumnDefinition>|null
     */
@@ -119,6 +131,7 @@ class FileStorageContainer extends Entity implements Parsable
     public function getFieldDeserializers(): array {
         $o = $this;
         return array_merge(parent::getFieldDeserializers(), [
+            'assignedSensitivityLabel' => fn(ParseNode $n) => $o->setAssignedSensitivityLabel($n->getObjectValue([AssignedLabel::class, 'createFromDiscriminatorValue'])),
             'columns' => fn(ParseNode $n) => $o->setColumns($n->getCollectionOfObjectValues([ColumnDefinition::class, 'createFromDiscriminatorValue'])),
             'containerTypeId' => fn(ParseNode $n) => $o->setContainerTypeId($n->getStringValue()),
             'createdDateTime' => fn(ParseNode $n) => $o->setCreatedDateTime($n->getDateTimeValue()),
@@ -127,6 +140,7 @@ class FileStorageContainer extends Entity implements Parsable
             'displayName' => fn(ParseNode $n) => $o->setDisplayName($n->getStringValue()),
             'drive' => fn(ParseNode $n) => $o->setDrive($n->getObjectValue([Drive::class, 'createFromDiscriminatorValue'])),
             'lockState' => fn(ParseNode $n) => $o->setLockState($n->getEnumValue(SiteLockState::class)),
+            'migrationJobs' => fn(ParseNode $n) => $o->setMigrationJobs($n->getCollectionOfObjectValues([SharePointMigrationJob::class, 'createFromDiscriminatorValue'])),
             'permissions' => fn(ParseNode $n) => $o->setPermissions($n->getCollectionOfObjectValues([Permission::class, 'createFromDiscriminatorValue'])),
             'recycleBin' => fn(ParseNode $n) => $o->setRecycleBin($n->getObjectValue([RecycleBin::class, 'createFromDiscriminatorValue'])),
             'settings' => fn(ParseNode $n) => $o->setSettings($n->getObjectValue([FileStorageContainerSettings::class, 'createFromDiscriminatorValue'])),
@@ -145,6 +159,20 @@ class FileStorageContainer extends Entity implements Parsable
             return $val;
         }
         throw new \UnexpectedValueException("Invalid type found in backing store for 'lockState'");
+    }
+
+    /**
+     * Gets the migrationJobs property value. The collection of sharePointMigrationJob objects local to the container. Read-write.
+     * @return array<SharePointMigrationJob>|null
+    */
+    public function getMigrationJobs(): ?array {
+        $val = $this->getBackingStore()->get('migrationJobs');
+        if (is_array($val) || is_null($val)) {
+            TypeUtils::validateCollectionValues($val, SharePointMigrationJob::class);
+            /** @var array<SharePointMigrationJob>|null $val */
+            return $val;
+        }
+        throw new \UnexpectedValueException("Invalid type found in backing store for 'migrationJobs'");
     }
 
     /**
@@ -215,6 +243,7 @@ class FileStorageContainer extends Entity implements Parsable
     */
     public function serialize(SerializationWriter $writer): void {
         parent::serialize($writer);
+        $writer->writeObjectValue('assignedSensitivityLabel', $this->getAssignedSensitivityLabel());
         $writer->writeCollectionOfObjectValues('columns', $this->getColumns());
         $writer->writeStringValue('containerTypeId', $this->getContainerTypeId());
         $writer->writeDateTimeValue('createdDateTime', $this->getCreatedDateTime());
@@ -223,11 +252,20 @@ class FileStorageContainer extends Entity implements Parsable
         $writer->writeStringValue('displayName', $this->getDisplayName());
         $writer->writeObjectValue('drive', $this->getDrive());
         $writer->writeEnumValue('lockState', $this->getLockState());
+        $writer->writeCollectionOfObjectValues('migrationJobs', $this->getMigrationJobs());
         $writer->writeCollectionOfObjectValues('permissions', $this->getPermissions());
         $writer->writeObjectValue('recycleBin', $this->getRecycleBin());
         $writer->writeObjectValue('settings', $this->getSettings());
         $writer->writeEnumValue('status', $this->getStatus());
         $writer->writeObjectValue('viewpoint', $this->getViewpoint());
+    }
+
+    /**
+     * Sets the assignedSensitivityLabel property value. Sensitivity label assigned to the fileStorageContainer. Read-write.
+     * @param AssignedLabel|null $value Value to set for the assignedSensitivityLabel property.
+    */
+    public function setAssignedSensitivityLabel(?AssignedLabel $value): void {
+        $this->getBackingStore()->set('assignedSensitivityLabel', $value);
     }
 
     /**
@@ -292,6 +330,14 @@ class FileStorageContainer extends Entity implements Parsable
     */
     public function setLockState(?SiteLockState $value): void {
         $this->getBackingStore()->set('lockState', $value);
+    }
+
+    /**
+     * Sets the migrationJobs property value. The collection of sharePointMigrationJob objects local to the container. Read-write.
+     * @param array<SharePointMigrationJob>|null $value Value to set for the migrationJobs property.
+    */
+    public function setMigrationJobs(?array $value): void {
+        $this->getBackingStore()->set('migrationJobs', $value);
     }
 
     /**

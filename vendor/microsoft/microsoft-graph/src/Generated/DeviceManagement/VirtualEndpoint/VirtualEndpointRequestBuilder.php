@@ -10,6 +10,7 @@ use Microsoft\Graph\Generated\DeviceManagement\VirtualEndpoint\DeviceImages\Devi
 use Microsoft\Graph\Generated\DeviceManagement\VirtualEndpoint\GalleryImages\GalleryImagesRequestBuilder;
 use Microsoft\Graph\Generated\DeviceManagement\VirtualEndpoint\OnPremisesConnections\OnPremisesConnectionsRequestBuilder;
 use Microsoft\Graph\Generated\DeviceManagement\VirtualEndpoint\ProvisioningPolicies\ProvisioningPoliciesRequestBuilder;
+use Microsoft\Graph\Generated\DeviceManagement\VirtualEndpoint\Report\ReportRequestBuilder;
 use Microsoft\Graph\Generated\DeviceManagement\VirtualEndpoint\UserSettings\UserSettingsRequestBuilder;
 use Microsoft\Graph\Generated\Models\ODataErrors\ODataError;
 use Microsoft\Graph\Generated\Models\VirtualEndpoint;
@@ -66,6 +67,13 @@ class VirtualEndpointRequestBuilder extends BaseRequestBuilder
     }
     
     /**
+     * Provides operations to manage the report property of the microsoft.graph.virtualEndpoint entity.
+    */
+    public function report(): ReportRequestBuilder {
+        return new ReportRequestBuilder($this->pathParameters, $this->requestAdapter);
+    }
+    
+    /**
      * Provides operations to manage the userSettings property of the microsoft.graph.virtualEndpoint entity.
     */
     public function userSettings(): UserSettingsRequestBuilder {
@@ -101,7 +109,7 @@ class VirtualEndpointRequestBuilder extends BaseRequestBuilder
     }
 
     /**
-     * Virtual endpoint
+     * Get virtualEndpoint from deviceManagement
      * @param VirtualEndpointRequestBuilderGetRequestConfiguration|null $requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @return Promise<VirtualEndpoint|null>
      * @throws Exception
@@ -148,7 +156,7 @@ class VirtualEndpointRequestBuilder extends BaseRequestBuilder
     }
 
     /**
-     * Virtual endpoint
+     * Get virtualEndpoint from deviceManagement
      * @param VirtualEndpointRequestBuilderGetRequestConfiguration|null $requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @return RequestInformation
     */

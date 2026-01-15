@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.40.0](https://github.com/googleapis/gax-php/compare/v1.39.0...v1.40.0) (2025-12-04)
+
+
+### Features
+
+* Add TransportCallMiddleware ([#640](https://github.com/googleapis/gax-php/issues/640)) ([a0f9d37](https://github.com/googleapis/gax-php/commit/a0f9d3740d62f6a776ac701631aa734046ceeb77))
+
+## [1.39.0](https://github.com/googleapis/gax-php/compare/v1.38.2...v1.39.0) (2025-12-02)
+
+
+### Features
+
+* Add GapicClientTrait::prependMiddleware ([#638](https://github.com/googleapis/gax-php/issues/638)) ([d46c06d](https://github.com/googleapis/gax-php/commit/d46c06d3bb551d9f7848bceebcfd78f80ec7890f))
+
+## [1.38.2](https://github.com/googleapis/gax-php/compare/v1.38.1...v1.38.2) (2025-11-14)
+
+
+### Bug Fixes
+
+* Don't override ApiException::__toString ([#388](https://github.com/googleapis/gax-php/issues/388)) ([db7cd2e](https://github.com/googleapis/gax-php/commit/db7cd2e55219463aa0f7d0bcc989f35d008d174b))
+
+## [1.38.1](https://github.com/googleapis/gax-php/compare/v1.38.0...v1.38.1) (2025-11-06)
+
+
+### Bug Fixes
+
+* Add return type to `offsetGet` ([#633](https://github.com/googleapis/gax-php/issues/633)) ([b77c12d](https://github.com/googleapis/gax-php/commit/b77c12dc959e8434fcd1f7f08cedaa84cdfb00a4))
+
 ## [1.38.0](https://github.com/googleapis/gax-php/compare/v1.37.0...v1.38.0) (2025-09-17)
 
 

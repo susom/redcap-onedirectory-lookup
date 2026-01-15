@@ -7,6 +7,9 @@ use Http\Promise\Promise;
 use Microsoft\Graph\Generated\Models\ODataErrors\ODataError;
 use Microsoft\Graph\Generated\Models\Security\IdentityContainer;
 use Microsoft\Graph\Generated\Security\Identities\HealthIssues\HealthIssuesRequestBuilder;
+use Microsoft\Graph\Generated\Security\Identities\IdentityAccounts\IdentityAccountsRequestBuilder;
+use Microsoft\Graph\Generated\Security\Identities\SensorCandidateActivationConfiguration\SensorCandidateActivationConfigurationRequestBuilder;
+use Microsoft\Graph\Generated\Security\Identities\SensorCandidates\SensorCandidatesRequestBuilder;
 use Microsoft\Graph\Generated\Security\Identities\Sensors\SensorsRequestBuilder;
 use Microsoft\Kiota\Abstractions\BaseRequestBuilder;
 use Microsoft\Kiota\Abstractions\HttpMethod;
@@ -23,6 +26,27 @@ class IdentitiesRequestBuilder extends BaseRequestBuilder
     */
     public function healthIssues(): HealthIssuesRequestBuilder {
         return new HealthIssuesRequestBuilder($this->pathParameters, $this->requestAdapter);
+    }
+    
+    /**
+     * Provides operations to manage the identityAccounts property of the microsoft.graph.security.identityContainer entity.
+    */
+    public function identityAccounts(): IdentityAccountsRequestBuilder {
+        return new IdentityAccountsRequestBuilder($this->pathParameters, $this->requestAdapter);
+    }
+    
+    /**
+     * Provides operations to manage the sensorCandidateActivationConfiguration property of the microsoft.graph.security.identityContainer entity.
+    */
+    public function sensorCandidateActivationConfiguration(): SensorCandidateActivationConfigurationRequestBuilder {
+        return new SensorCandidateActivationConfigurationRequestBuilder($this->pathParameters, $this->requestAdapter);
+    }
+    
+    /**
+     * Provides operations to manage the sensorCandidates property of the microsoft.graph.security.identityContainer entity.
+    */
+    public function sensorCandidates(): SensorCandidatesRequestBuilder {
+        return new SensorCandidatesRequestBuilder($this->pathParameters, $this->requestAdapter);
     }
     
     /**

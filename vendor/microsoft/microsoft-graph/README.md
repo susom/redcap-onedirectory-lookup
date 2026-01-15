@@ -11,7 +11,7 @@ You can install the PHP SDK with Composer by editing your `composer.json` file:
 {
     "require": {
         // x-release-please-start-version
-        "microsoft/microsoft-graph": "^2.49.0"
+        "microsoft/microsoft-graph": "^2.54.0"
         // x-release-please-end
     }
 }
@@ -145,6 +145,10 @@ try {
 * [Examples](docs/README.md#using-the-sdk)
 
 * [Microsoft Graph website](https://aka.ms/graph)
+
+## Update Schedule
+
+The Microsoft Graph PHP SDK is scheduled to be updated during the second and fourth week of each month
 
 ## Upgrading
 

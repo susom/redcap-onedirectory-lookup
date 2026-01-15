@@ -12,6 +12,9 @@ use Microsoft\Kiota\Abstractions\Store\BackingStore;
 use Microsoft\Kiota\Abstractions\Store\BackingStoreFactorySingleton;
 use Microsoft\Kiota\Abstractions\Types\TypeUtils;
 
+/**
+ * Represents a container that exposes navigation properties for cloud communications resources.
+*/
 class CloudCommunications implements AdditionalDataHolder, BackedModel, Parsable 
 {
     /**
@@ -47,6 +50,20 @@ class CloudCommunications implements AdditionalDataHolder, BackedModel, Parsable
             return $val;
         }
         throw new \UnexpectedValueException("Invalid type found in backing store for 'additionalData'");
+    }
+
+    /**
+     * Gets the adhocCalls property value. The adhocCalls property
+     * @return array<AdhocCall>|null
+    */
+    public function getAdhocCalls(): ?array {
+        $val = $this->getBackingStore()->get('adhocCalls');
+        if (is_array($val) || is_null($val)) {
+            TypeUtils::validateCollectionValues($val, AdhocCall::class);
+            /** @var array<AdhocCall>|null $val */
+            return $val;
+        }
+        throw new \UnexpectedValueException("Invalid type found in backing store for 'adhocCalls'");
     }
 
     /**
@@ -92,9 +109,11 @@ class CloudCommunications implements AdditionalDataHolder, BackedModel, Parsable
     public function getFieldDeserializers(): array {
         $o = $this;
         return  [
+            'adhocCalls' => fn(ParseNode $n) => $o->setAdhocCalls($n->getCollectionOfObjectValues([AdhocCall::class, 'createFromDiscriminatorValue'])),
             'callRecords' => fn(ParseNode $n) => $o->setCallRecords($n->getCollectionOfObjectValues([CallRecord::class, 'createFromDiscriminatorValue'])),
             'calls' => fn(ParseNode $n) => $o->setCalls($n->getCollectionOfObjectValues([Call::class, 'createFromDiscriminatorValue'])),
             '@odata.type' => fn(ParseNode $n) => $o->setOdataType($n->getStringValue()),
+            'onlineMeetingConversations' => fn(ParseNode $n) => $o->setOnlineMeetingConversations($n->getCollectionOfObjectValues([OnlineMeetingEngagementConversation::class, 'createFromDiscriminatorValue'])),
             'onlineMeetings' => fn(ParseNode $n) => $o->setOnlineMeetings($n->getCollectionOfObjectValues([OnlineMeeting::class, 'createFromDiscriminatorValue'])),
             'presences' => fn(ParseNode $n) => $o->setPresences($n->getCollectionOfObjectValues([Presence::class, 'createFromDiscriminatorValue'])),
         ];
@@ -110,6 +129,20 @@ class CloudCommunications implements AdditionalDataHolder, BackedModel, Parsable
             return $val;
         }
         throw new \UnexpectedValueException("Invalid type found in backing store for 'odataType'");
+    }
+
+    /**
+     * Gets the onlineMeetingConversations property value. A collection of structured question-and-answer (Q&A) threads in Teams directly associated with online meetings.
+     * @return array<OnlineMeetingEngagementConversation>|null
+    */
+    public function getOnlineMeetingConversations(): ?array {
+        $val = $this->getBackingStore()->get('onlineMeetingConversations');
+        if (is_array($val) || is_null($val)) {
+            TypeUtils::validateCollectionValues($val, OnlineMeetingEngagementConversation::class);
+            /** @var array<OnlineMeetingEngagementConversation>|null $val */
+            return $val;
+        }
+        throw new \UnexpectedValueException("Invalid type found in backing store for 'onlineMeetingConversations'");
     }
 
     /**
@@ -145,9 +178,11 @@ class CloudCommunications implements AdditionalDataHolder, BackedModel, Parsable
      * @param SerializationWriter $writer Serialization writer to use to serialize this model
     */
     public function serialize(SerializationWriter $writer): void {
+        $writer->writeCollectionOfObjectValues('adhocCalls', $this->getAdhocCalls());
         $writer->writeCollectionOfObjectValues('callRecords', $this->getCallRecords());
         $writer->writeCollectionOfObjectValues('calls', $this->getCalls());
         $writer->writeStringValue('@odata.type', $this->getOdataType());
+        $writer->writeCollectionOfObjectValues('onlineMeetingConversations', $this->getOnlineMeetingConversations());
         $writer->writeCollectionOfObjectValues('onlineMeetings', $this->getOnlineMeetings());
         $writer->writeCollectionOfObjectValues('presences', $this->getPresences());
         $writer->writeAdditionalData($this->getAdditionalData());
@@ -159,6 +194,14 @@ class CloudCommunications implements AdditionalDataHolder, BackedModel, Parsable
     */
     public function setAdditionalData(?array $value): void {
         $this->getBackingStore()->set('additionalData', $value);
+    }
+
+    /**
+     * Sets the adhocCalls property value. The adhocCalls property
+     * @param array<AdhocCall>|null $value Value to set for the adhocCalls property.
+    */
+    public function setAdhocCalls(?array $value): void {
+        $this->getBackingStore()->set('adhocCalls', $value);
     }
 
     /**
@@ -191,6 +234,14 @@ class CloudCommunications implements AdditionalDataHolder, BackedModel, Parsable
     */
     public function setOdataType(?string $value): void {
         $this->getBackingStore()->set('odataType', $value);
+    }
+
+    /**
+     * Sets the onlineMeetingConversations property value. A collection of structured question-and-answer (Q&A) threads in Teams directly associated with online meetings.
+     * @param array<OnlineMeetingEngagementConversation>|null $value Value to set for the onlineMeetingConversations property.
+    */
+    public function setOnlineMeetingConversations(?array $value): void {
+        $this->getBackingStore()->set('onlineMeetingConversations', $value);
     }
 
     /**

@@ -156,18 +156,23 @@ class MSGraphClient
      */
     private function graphGetRequest(string $endpoint, array $queryParams = [], array $additionalHeaders = []): array
     {
+        error_log('[MSGraphClient] graphGetRequest() called for endpoint: ' . $endpoint);
+
         // Get (or refresh) the access token from system settings
         $accessToken = $this->getAccessToken();
         if (!$accessToken) {
             error_log('[MSGraphClient] Failed to get access token for Graph request.');
             return [];
         }
+        error_log('[MSGraphClient] Access token obtained (length: ' . strlen($accessToken) . ' bytes)');
 
         $baseUrl = 'https://graph.microsoft.com/v1.0';
         $url = $baseUrl . $endpoint;
 
         if (!empty($queryParams)) {
-            $url .= '?' . http_build_query($queryParams);
+            $queryString = http_build_query($queryParams);
+            $url .= '?' . $queryString;
+            error_log('[MSGraphClient] Query parameters: ' . $queryString);
         }
 
         $headers = [
@@ -178,6 +183,11 @@ class MSGraphClient
 
         // Merge additional headers
         $headers = array_merge($headers, $additionalHeaders);
+        if (!empty($additionalHeaders)) {
+            error_log('[MSGraphClient] Additional headers: ' . implode(', ', array_keys($additionalHeaders)));
+        }
+
+        error_log('[MSGraphClient] Full URL: ' . $url);
 
         $http = new GuzzleClient([
             'timeout' => 10.0,
@@ -185,23 +195,41 @@ class MSGraphClient
         ]);
 
         try {
+            error_log('[MSGraphClient] Sending GET request to Graph...');
             $response = $http->get($url, ['headers' => $headers]);
 
             $statusCode = $response->getStatusCode();
+            error_log('[MSGraphClient] Graph response received with status: ' . $statusCode);
+
             if ($statusCode !== 200) {
-                error_log('[MSGraphClient] Graph request failed with status ' . $statusCode);
+                error_log('[MSGraphClient] ERROR: Graph request failed with HTTP ' . $statusCode);
                 return [];
             }
 
             $body = (string)$response->getBody();
-            $data = json_decode($body, true);
+            error_log('[MSGraphClient] Response body length: ' . strlen($body) . ' bytes');
 
-            return is_array($data) ? $data : [];
+            $data = json_decode($body, true);
+            if (!is_array($data)) {
+                error_log('[MSGraphClient] ERROR: Failed to parse Graph response as JSON');
+                return [];
+            }
+
+            $valueCount = isset($data['value']) && is_array($data['value']) ? count($data['value']) : 0;
+            error_log('[MSGraphClient] Graph response parsed. Contains ' . $valueCount . ' items');
+
+            return $data;
         } catch (GuzzleException $e) {
-            error_log('[MSGraphClient] Graph request error: ' . $e->getMessage());
+            error_log('[MSGraphClient] GuzzleException during Graph request: ' . $e->getMessage());
+            error_log('[MSGraphClient] Request URI: ' . $e->getRequest()->getUri());
+            if ($e->hasResponse()) {
+                error_log('[MSGraphClient] Response status: ' . $e->getResponse()->getStatusCode());
+                error_log('[MSGraphClient] Response body (first 500 chars): ' . substr((string)$e->getResponse()->getBody(), 0, 500));
+            }
             return [];
         } catch (\Throwable $e) {
             error_log('[MSGraphClient] Unexpected error in Graph request: ' . $e->getMessage());
+            error_log('[MSGraphClient] Exception class: ' . get_class($e));
             return [];
         }
     }
@@ -214,12 +242,16 @@ class MSGraphClient
      */
     private function fetchGraphPageByUrl(string $url): array
     {
+        error_log('[MSGraphClient] fetchGraphPageByUrl() called');
+        error_log('[MSGraphClient] Pagination URL: ' . $url);
+
         // Get (or refresh) the access token from system settings
         $accessToken = $this->getAccessToken();
         if (!$accessToken) {
-            error_log('[MSGraphClient] Failed to get access token for Graph request.');
+            error_log('[MSGraphClient] Failed to get access token for pagination request.');
             return [];
         }
+        error_log('[MSGraphClient] Access token obtained for pagination (length: ' . strlen($accessToken) . ' bytes)');
 
         $headers = [
             'Authorization' => 'Bearer ' . $accessToken,
@@ -234,23 +266,47 @@ class MSGraphClient
         ]);
 
         try {
+            error_log('[MSGraphClient] Sending pagination request to Graph...');
             $response = $http->get($url, ['headers' => $headers]);
 
             $statusCode = $response->getStatusCode();
+            error_log('[MSGraphClient] Pagination response received with status: ' . $statusCode);
+
             if ($statusCode !== 200) {
-                error_log('[MSGraphClient] Graph request failed with status ' . $statusCode);
+                error_log('[MSGraphClient] ERROR: Pagination request failed with HTTP ' . $statusCode);
                 return [];
             }
 
             $body = (string)$response->getBody();
-            $data = json_decode($body, true);
+            error_log('[MSGraphClient] Response body length: ' . strlen($body) . ' bytes');
 
-            return is_array($data) ? $data : [];
+            $data = json_decode($body, true);
+            if (!is_array($data)) {
+                error_log('[MSGraphClient] ERROR: Failed to parse pagination response as JSON');
+                return [];
+            }
+
+            $valueCount = isset($data['value']) && is_array($data['value']) ? count($data['value']) : 0;
+            error_log('[MSGraphClient] Pagination response parsed. Contains ' . $valueCount . ' items');
+
+            if (isset($data['@odata.nextLink'])) {
+                error_log('[MSGraphClient] Next page available via @odata.nextLink');
+            } else {
+                error_log('[MSGraphClient] No more pages (@odata.nextLink not present)');
+            }
+
+            return $data;
         } catch (GuzzleException $e) {
-            error_log('[MSGraphClient] Graph request error: ' . $e->getMessage());
+            error_log('[MSGraphClient] GuzzleException during pagination request: ' . $e->getMessage());
+            error_log('[MSGraphClient] Request URI: ' . $e->getRequest()->getUri());
+            if ($e->hasResponse()) {
+                error_log('[MSGraphClient] Response status: ' . $e->getResponse()->getStatusCode());
+                error_log('[MSGraphClient] Response body (first 500 chars): ' . substr((string)$e->getResponse()->getBody(), 0, 500));
+            }
             return [];
         } catch (\Throwable $e) {
-            error_log('[MSGraphClient] Unexpected error in Graph request: ' . $e->getMessage());
+            error_log('[MSGraphClient] Unexpected error in pagination request: ' . $e->getMessage());
+            error_log('[MSGraphClient] Exception class: ' . get_class($e));
             return [];
         }
     }
@@ -711,19 +767,35 @@ class MSGraphClient
     {
         // Only load if not already loaded
         if ($this->tenantId !== null && $this->clientId !== null && $this->clientSecret !== null) {
+            error_log('[MSGraphClient] Credentials already loaded (cached in memory)');
             return true;
         }
 
+        error_log('[MSGraphClient] Loading credentials from Google Secret Manager...');
         try {
+            error_log('[MSGraphClient] Fetching MS_GRAPH_TENANT_ID secret...');
             $this->tenantId = $this->secretManager->getSecret(self::MS_GRAPH_TENANT_ID);
+            error_log('[MSGraphClient] Successfully loaded MS_GRAPH_TENANT_ID');
+
+            error_log('[MSGraphClient] Fetching MS_GRAPH_CLIENT_ID secret...');
             $this->clientId = $this->secretManager->getSecret(self::MS_GRAPH_CLIENT_ID);
+            error_log('[MSGraphClient] Successfully loaded MS_GRAPH_CLIENT_ID');
+
+            error_log('[MSGraphClient] Fetching MS_GRAPH_CLIENT_SECRET secret...');
             $this->clientSecret = $this->secretManager->getSecret(self::MS_GRAPH_CLIENT_SECRET);
+            error_log('[MSGraphClient] Successfully loaded MS_GRAPH_CLIENT_SECRET');
+
+            error_log('[MSGraphClient] All credentials loaded successfully');
             return true;
         } catch (ApiException $e) {
-            error_log('[MSGraphClient] Failed to load credentials from Google Secret Manager: ' . $e->getMessage());
+            error_log('[MSGraphClient] ApiException loading credentials: ' . $e->getMessage());
+            error_log('[MSGraphClient] Status code: ' . $e->getCode());
+            error_log('[MSGraphClient] Details: ' . $e->getDetails());
             return false;
         } catch (\Throwable $e) {
             error_log('[MSGraphClient] Unexpected error loading credentials: ' . $e->getMessage());
+            error_log('[MSGraphClient] Exception class: ' . get_class($e));
+            error_log('[MSGraphClient] Stack trace: ' . $e->getTraceAsString());
             return false;
         }
     }
@@ -740,40 +812,67 @@ class MSGraphClient
     public function getAccessToken(): ?string
     {
         $now = time();
+        error_log('[MSGraphClient] getAccessToken() called at timestamp: ' . $now);
 
         // Check for cached token in system settings
+        error_log('[MSGraphClient] Checking for cached token in system settings...');
         $cachedToken = $this->module->getSystemSetting('microsoft-graph-access-token');
         $tokenExpirationTs = $this->module->getSystemSetting('microsoft-graph-access-token-expiration-timestamp');
 
         // If token exists and is not expired (with 60-second safety window), return it
         if ($cachedToken && $tokenExpirationTs) {
             $tokenExpirationTs = (int)$tokenExpirationTs;
-            if (($tokenExpirationTs - 60) > $now) {
+            $secondsUntilExpiry = $tokenExpirationTs - $now;
+            $safetyWindowSeconds = 60;
+
+            error_log('[MSGraphClient] Found cached token. Expires at: ' . $tokenExpirationTs . ', expires in: ' . $secondsUntilExpiry . ' seconds');
+
+            if (($tokenExpirationTs - $safetyWindowSeconds) > $now) {
+                error_log('[MSGraphClient] Cached token is valid (safety window check passed). Returning cached token.');
                 return $cachedToken;
+            } else {
+                error_log('[MSGraphClient] Cached token is expired or within safety window. Need to refresh.');
+            }
+        } else {
+            error_log('[MSGraphClient] No cached token found. Need to fetch new token.');
+            if (!$cachedToken) {
+                error_log('[MSGraphClient]   - Cached token is missing');
+            }
+            if (!$tokenExpirationTs) {
+                error_log('[MSGraphClient]   - Token expiration timestamp is missing');
             }
         }
 
         // Load credentials from Google Secret Manager only when needed
+        error_log('[MSGraphClient] Loading credentials for token request...');
         if (!$this->loadCredentialsIfNeeded()) {
+            error_log('[MSGraphClient] Failed to load credentials. Cannot proceed with token request.');
             return null;
         }
 
         $tenantId = trim($this->tenantId);
         $clientId = trim($this->clientId);
         $clientSecret = $this->clientSecret;
+
         if ($tenantId === '' || $clientId === '' || $clientSecret === '') {
             error_log('[MSGraphClient] Missing Graph app credentials (TENANT/CLIENT_ID/CLIENT_SECRET).');
+            error_log('[MSGraphClient]   - TenantId empty: ' . ($tenantId === '' ? 'YES' : 'NO'));
+            error_log('[MSGraphClient]   - ClientId empty: ' . ($clientId === '' ? 'YES' : 'NO'));
+            error_log('[MSGraphClient]   - ClientSecret empty: ' . ($clientSecret === '' ? 'YES' : 'NO'));
             return null;
         }
 
         $authorityHost = 'https://login.microsoftonline.com';
         $tokenEndpoint = $authorityHost . '/' . rawurlencode($tenantId) . '/oauth2/v2.0/token';
+        error_log('[MSGraphClient] Token endpoint: ' . $tokenEndpoint);
 
         $http = new GuzzleClient([
             'timeout' => 5.0,
             'connect_timeout' => 2.0,
         ]);
+
         try {
+            error_log('[MSGraphClient] Sending token request to Microsoft....');
             $resp = $http->post($tokenEndpoint, [
                 'form_params' => [
                     'client_id' => $clientId,
@@ -785,15 +884,28 @@ class MSGraphClient
                     'Accept' => 'application/json',
                 ],
             ]);
+
             $status = $resp->getStatusCode();
+            error_log('[MSGraphClient] Token request completed with HTTP status: ' . $status);
+
             $body = (string)$resp->getBody();
             if ($status !== 200) {
-                error_log('[MSGraphClient] Token request failed: HTTP ' . $status . ' body=' . substr($body, 0, 500));
+                error_log('[MSGraphClient] ERROR: Token request failed with HTTP ' . $status);
+                error_log('[MSGraphClient] Response body (first 500 chars): ' . substr($body, 0, 500));
                 return null;
             }
+
             $json = json_decode($body, true);
-            if (!is_array($json) || empty($json['access_token'])) {
-                error_log('[MSGraphClient] Token response missing access_token: ' . substr($body, 0, 500));
+            if (!is_array($json)) {
+                error_log('[MSGraphClient] ERROR: Failed to parse token response as JSON');
+                error_log('[MSGraphClient] Response body: ' . substr($body, 0, 500));
+                return null;
+            }
+
+            if (empty($json['access_token'])) {
+                error_log('[MSGraphClient] ERROR: Token response missing access_token field');
+                error_log('[MSGraphClient] Response keys: ' . implode(', ', array_keys($json)));
+                error_log('[MSGraphClient] Response body: ' . substr($body, 0, 500));
                 return null;
             }
 
@@ -801,20 +913,33 @@ class MSGraphClient
             $expiresIn = isset($json['expires_in']) ? (int)$json['expires_in'] : 3600;
             $expirationTs = $now + max(300, $expiresIn);
 
+            error_log('[MSGraphClient] New token acquired. Token length: ' . strlen($token) . ' bytes');
+            error_log('[MSGraphClient] Token expires in: ' . $expiresIn . ' seconds, will expire at: ' . $expirationTs);
+
             // Save token and expiration to system settings
+            error_log('[MSGraphClient] Saving token to system settings...');
             $this->module->setSystemSetting('microsoft-graph-access-token', $token);
             $this->module->setSystemSetting('microsoft-graph-access-token-expiration-timestamp', (string)$expirationTs);
+            error_log('[MSGraphClient] Token saved to system settings');
 
             // Also update in-memory cache for this request
             $this->accessToken = $token;
             $this->accessTokenExpiresAt = (int)$expirationTs;
 
+            error_log('[MSGraphClient] Token acquisition successful');
             return $token;
         } catch (GuzzleException $e) {
-            error_log('[MSGraphClient] Token request error: ' . $e->getMessage());
+            error_log('[MSGraphClient] GuzzleException during token request: ' . $e->getMessage());
+            error_log('[MSGraphClient] Request: ' . $e->getRequest()->getUri());
+            if ($e->hasResponse()) {
+                error_log('[MSGraphClient] Response status: ' . $e->getResponse()->getStatusCode());
+                error_log('[MSGraphClient] Response body: ' . substr((string)$e->getResponse()->getBody(), 0, 500));
+            }
             return null;
         } catch (\Throwable $e) {
-            error_log('[MSGraphClient] Token request unexpected error: ' . $e->getMessage());
+            error_log('[MSGraphClient] Unexpected exception during token request: ' . $e->getMessage());
+            error_log('[MSGraphClient] Exception class: ' . get_class($e));
+            error_log('[MSGraphClient] Stack trace: ' . $e->getTraceAsString());
             return null;
         }
     }

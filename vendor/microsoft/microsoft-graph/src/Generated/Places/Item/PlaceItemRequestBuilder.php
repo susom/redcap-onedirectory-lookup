@@ -6,8 +6,15 @@ use Exception;
 use Http\Promise\Promise;
 use Microsoft\Graph\Generated\Models\ODataErrors\ODataError;
 use Microsoft\Graph\Generated\Models\Place;
+use Microsoft\Graph\Generated\Places\Item\CheckIns\CheckInsRequestBuilder;
+use Microsoft\Graph\Generated\Places\Item\Descendants\DescendantsRequestBuilder;
+use Microsoft\Graph\Generated\Places\Item\GraphBuilding\GraphBuildingRequestBuilder;
+use Microsoft\Graph\Generated\Places\Item\GraphDesk\GraphDeskRequestBuilder;
+use Microsoft\Graph\Generated\Places\Item\GraphFloor\GraphFloorRequestBuilder;
 use Microsoft\Graph\Generated\Places\Item\GraphRoom\GraphRoomRequestBuilder;
 use Microsoft\Graph\Generated\Places\Item\GraphRoomList\GraphRoomListRequestBuilder;
+use Microsoft\Graph\Generated\Places\Item\GraphSection\GraphSectionRequestBuilder;
+use Microsoft\Graph\Generated\Places\Item\GraphWorkspace\GraphWorkspaceRequestBuilder;
 use Microsoft\Kiota\Abstractions\BaseRequestBuilder;
 use Microsoft\Kiota\Abstractions\HttpMethod;
 use Microsoft\Kiota\Abstractions\RequestAdapter;
@@ -18,6 +25,41 @@ use Microsoft\Kiota\Abstractions\RequestInformation;
 */
 class PlaceItemRequestBuilder extends BaseRequestBuilder 
 {
+    /**
+     * Provides operations to manage the checkIns property of the microsoft.graph.place entity.
+    */
+    public function checkIns(): CheckInsRequestBuilder {
+        return new CheckInsRequestBuilder($this->pathParameters, $this->requestAdapter);
+    }
+    
+    /**
+     * Provides operations to call the descendants method.
+    */
+    public function descendants(): DescendantsRequestBuilder {
+        return new DescendantsRequestBuilder($this->pathParameters, $this->requestAdapter);
+    }
+    
+    /**
+     * Casts the previous resource to building.
+    */
+    public function graphBuilding(): GraphBuildingRequestBuilder {
+        return new GraphBuildingRequestBuilder($this->pathParameters, $this->requestAdapter);
+    }
+    
+    /**
+     * Casts the previous resource to desk.
+    */
+    public function graphDesk(): GraphDeskRequestBuilder {
+        return new GraphDeskRequestBuilder($this->pathParameters, $this->requestAdapter);
+    }
+    
+    /**
+     * Casts the previous resource to floor.
+    */
+    public function graphFloor(): GraphFloorRequestBuilder {
+        return new GraphFloorRequestBuilder($this->pathParameters, $this->requestAdapter);
+    }
+    
     /**
      * Casts the previous resource to room.
     */
@@ -30,6 +72,20 @@ class PlaceItemRequestBuilder extends BaseRequestBuilder
     */
     public function graphRoomList(): GraphRoomListRequestBuilder {
         return new GraphRoomListRequestBuilder($this->pathParameters, $this->requestAdapter);
+    }
+    
+    /**
+     * Casts the previous resource to section.
+    */
+    public function graphSection(): GraphSectionRequestBuilder {
+        return new GraphSectionRequestBuilder($this->pathParameters, $this->requestAdapter);
+    }
+    
+    /**
+     * Casts the previous resource to workspace.
+    */
+    public function graphWorkspace(): GraphWorkspaceRequestBuilder {
+        return new GraphWorkspaceRequestBuilder($this->pathParameters, $this->requestAdapter);
     }
     
     /**
@@ -47,10 +103,11 @@ class PlaceItemRequestBuilder extends BaseRequestBuilder
     }
 
     /**
-     * Delete entity from places
+     * Delete a place object. You can also use this method to delete the following child object types: building, floor, section, or desk.
      * @param PlaceItemRequestBuilderDeleteRequestConfiguration|null $requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @return Promise<void|null>
      * @throws Exception
+     * @link https://learn.microsoft.com/graph/api/place-delete?view=graph-rest-1.0 Find more info here
     */
     public function delete(?PlaceItemRequestBuilderDeleteRequestConfiguration $requestConfiguration = null): Promise {
         $requestInfo = $this->toDeleteRequestInformation($requestConfiguration);
@@ -61,7 +118,7 @@ class PlaceItemRequestBuilder extends BaseRequestBuilder
     }
 
     /**
-     * Update the properties of place object, which can be a room or roomList. You can identify the room or roomList by specifying the id or emailAddress property.
+     * Update the properties of place object that can be a building, floor, section, desk, room, workspace, or roomList. You can identify the place by specifying the id property.
      * @param Place $body The request body
      * @param PlaceItemRequestBuilderPatchRequestConfiguration|null $requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @return Promise<Place|null>
@@ -77,7 +134,7 @@ class PlaceItemRequestBuilder extends BaseRequestBuilder
     }
 
     /**
-     * Delete entity from places
+     * Delete a place object. You can also use this method to delete the following child object types: building, floor, section, or desk.
      * @param PlaceItemRequestBuilderDeleteRequestConfiguration|null $requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @return RequestInformation
     */
@@ -95,7 +152,7 @@ class PlaceItemRequestBuilder extends BaseRequestBuilder
     }
 
     /**
-     * Update the properties of place object, which can be a room or roomList. You can identify the room or roomList by specifying the id or emailAddress property.
+     * Update the properties of place object that can be a building, floor, section, desk, room, workspace, or roomList. You can identify the place by specifying the id property.
      * @param Place $body The request body
      * @param PlaceItemRequestBuilderPatchRequestConfiguration|null $requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @return RequestInformation

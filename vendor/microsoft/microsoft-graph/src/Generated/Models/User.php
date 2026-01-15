@@ -69,6 +69,20 @@ class User extends DirectoryObject implements Parsable
     }
 
     /**
+     * Gets the adhocCalls property value. Ad hoc calls associated with the user. Read-only. Nullable.
+     * @return array<AdhocCall>|null
+    */
+    public function getAdhocCalls(): ?array {
+        $val = $this->getBackingStore()->get('adhocCalls');
+        if (is_array($val) || is_null($val)) {
+            TypeUtils::validateCollectionValues($val, AdhocCall::class);
+            /** @var array<AdhocCall>|null $val */
+            return $val;
+        }
+        throw new \UnexpectedValueException("Invalid type found in backing store for 'adhocCalls'");
+    }
+
+    /**
      * Gets the ageGroup property value. Sets the age group of the user. Allowed values: null, Minor, NotAdult, and Adult. For more information, see legal age group property definitions. Returned only on $select. Supports $filter (eq, ne, not, and in).
      * @return string|null
     */
@@ -276,6 +290,20 @@ class User extends DirectoryObject implements Parsable
             return $val;
         }
         throw new \UnexpectedValueException("Invalid type found in backing store for 'cloudClipboard'");
+    }
+
+    /**
+     * Gets the cloudPCs property value. The user's Cloud PCs. Read-only. Nullable.
+     * @return array<CloudPC>|null
+    */
+    public function getCloudPCs(): ?array {
+        $val = $this->getBackingStore()->get('cloudPCs');
+        if (is_array($val) || is_null($val)) {
+            TypeUtils::validateCollectionValues($val, CloudPC::class);
+            /** @var array<CloudPC>|null $val */
+            return $val;
+        }
+        throw new \UnexpectedValueException("Invalid type found in backing store for 'cloudPCs'");
     }
 
     /**
@@ -652,6 +680,7 @@ class User extends DirectoryObject implements Parsable
             'aboutMe' => fn(ParseNode $n) => $o->setAboutMe($n->getStringValue()),
             'accountEnabled' => fn(ParseNode $n) => $o->setAccountEnabled($n->getBooleanValue()),
             'activities' => fn(ParseNode $n) => $o->setActivities($n->getCollectionOfObjectValues([UserActivity::class, 'createFromDiscriminatorValue'])),
+            'adhocCalls' => fn(ParseNode $n) => $o->setAdhocCalls($n->getCollectionOfObjectValues([AdhocCall::class, 'createFromDiscriminatorValue'])),
             'ageGroup' => fn(ParseNode $n) => $o->setAgeGroup($n->getStringValue()),
             'agreementAcceptances' => fn(ParseNode $n) => $o->setAgreementAcceptances($n->getCollectionOfObjectValues([AgreementAcceptance::class, 'createFromDiscriminatorValue'])),
             'appRoleAssignments' => fn(ParseNode $n) => $o->setAppRoleAssignments($n->getCollectionOfObjectValues([AppRoleAssignment::class, 'createFromDiscriminatorValue'])),
@@ -675,6 +704,7 @@ class User extends DirectoryObject implements Parsable
             'chats' => fn(ParseNode $n) => $o->setChats($n->getCollectionOfObjectValues([Chat::class, 'createFromDiscriminatorValue'])),
             'city' => fn(ParseNode $n) => $o->setCity($n->getStringValue()),
             'cloudClipboard' => fn(ParseNode $n) => $o->setCloudClipboard($n->getObjectValue([CloudClipboardRoot::class, 'createFromDiscriminatorValue'])),
+            'cloudPCs' => fn(ParseNode $n) => $o->setCloudPCs($n->getCollectionOfObjectValues([CloudPC::class, 'createFromDiscriminatorValue'])),
             'companyName' => fn(ParseNode $n) => $o->setCompanyName($n->getStringValue()),
             'consentProvidedForMinor' => fn(ParseNode $n) => $o->setConsentProvidedForMinor($n->getStringValue()),
             'contactFolders' => fn(ParseNode $n) => $o->setContactFolders($n->getCollectionOfObjectValues([ContactFolder::class, 'createFromDiscriminatorValue'])),
@@ -757,6 +787,7 @@ class User extends DirectoryObject implements Parsable
             'onPremisesProvisioningErrors' => fn(ParseNode $n) => $o->setOnPremisesProvisioningErrors($n->getCollectionOfObjectValues([OnPremisesProvisioningError::class, 'createFromDiscriminatorValue'])),
             'onPremisesSamAccountName' => fn(ParseNode $n) => $o->setOnPremisesSamAccountName($n->getStringValue()),
             'onPremisesSecurityIdentifier' => fn(ParseNode $n) => $o->setOnPremisesSecurityIdentifier($n->getStringValue()),
+            'onPremisesSyncBehavior' => fn(ParseNode $n) => $o->setOnPremisesSyncBehavior($n->getObjectValue([OnPremisesSyncBehavior::class, 'createFromDiscriminatorValue'])),
             'onPremisesSyncEnabled' => fn(ParseNode $n) => $o->setOnPremisesSyncEnabled($n->getBooleanValue()),
             'onPremisesUserPrincipalName' => fn(ParseNode $n) => $o->setOnPremisesUserPrincipalName($n->getStringValue()),
             'otherMails' => function (ParseNode $n) {
@@ -1344,6 +1375,18 @@ class User extends DirectoryObject implements Parsable
     }
 
     /**
+     * Gets the onPremisesSyncBehavior property value. The onPremisesSyncBehavior property
+     * @return OnPremisesSyncBehavior|null
+    */
+    public function getOnPremisesSyncBehavior(): ?OnPremisesSyncBehavior {
+        $val = $this->getBackingStore()->get('onPremisesSyncBehavior');
+        if (is_null($val) || $val instanceof OnPremisesSyncBehavior) {
+            return $val;
+        }
+        throw new \UnexpectedValueException("Invalid type found in backing store for 'onPremisesSyncBehavior'");
+    }
+
+    /**
      * Gets the onPremisesSyncEnabled property value. true if this user object is currently being synced from an on-premises Active Directory (AD); otherwise the user isn't being synced and can be managed in Microsoft Entra ID. Read-only. Returned only on $select. Supports $filter (eq, ne, not, in, and eq on null values).
      * @return bool|null
     */
@@ -1902,6 +1945,7 @@ class User extends DirectoryObject implements Parsable
         $writer->writeStringValue('aboutMe', $this->getAboutMe());
         $writer->writeBooleanValue('accountEnabled', $this->getAccountEnabled());
         $writer->writeCollectionOfObjectValues('activities', $this->getActivities());
+        $writer->writeCollectionOfObjectValues('adhocCalls', $this->getAdhocCalls());
         $writer->writeStringValue('ageGroup', $this->getAgeGroup());
         $writer->writeCollectionOfObjectValues('agreementAcceptances', $this->getAgreementAcceptances());
         $writer->writeCollectionOfObjectValues('appRoleAssignments', $this->getAppRoleAssignments());
@@ -1918,6 +1962,7 @@ class User extends DirectoryObject implements Parsable
         $writer->writeCollectionOfObjectValues('chats', $this->getChats());
         $writer->writeStringValue('city', $this->getCity());
         $writer->writeObjectValue('cloudClipboard', $this->getCloudClipboard());
+        $writer->writeCollectionOfObjectValues('cloudPCs', $this->getCloudPCs());
         $writer->writeStringValue('companyName', $this->getCompanyName());
         $writer->writeStringValue('consentProvidedForMinor', $this->getConsentProvidedForMinor());
         $writer->writeCollectionOfObjectValues('contactFolders', $this->getContactFolders());
@@ -1986,6 +2031,7 @@ class User extends DirectoryObject implements Parsable
         $writer->writeCollectionOfObjectValues('onPremisesProvisioningErrors', $this->getOnPremisesProvisioningErrors());
         $writer->writeStringValue('onPremisesSamAccountName', $this->getOnPremisesSamAccountName());
         $writer->writeStringValue('onPremisesSecurityIdentifier', $this->getOnPremisesSecurityIdentifier());
+        $writer->writeObjectValue('onPremisesSyncBehavior', $this->getOnPremisesSyncBehavior());
         $writer->writeBooleanValue('onPremisesSyncEnabled', $this->getOnPremisesSyncEnabled());
         $writer->writeStringValue('onPremisesUserPrincipalName', $this->getOnPremisesUserPrincipalName());
         $writer->writeCollectionOfPrimitiveValues('otherMails', $this->getOtherMails());
@@ -2053,6 +2099,14 @@ class User extends DirectoryObject implements Parsable
     */
     public function setActivities(?array $value): void {
         $this->getBackingStore()->set('activities', $value);
+    }
+
+    /**
+     * Sets the adhocCalls property value. Ad hoc calls associated with the user. Read-only. Nullable.
+     * @param array<AdhocCall>|null $value Value to set for the adhocCalls property.
+    */
+    public function setAdhocCalls(?array $value): void {
+        $this->getBackingStore()->set('adhocCalls', $value);
     }
 
     /**
@@ -2181,6 +2235,14 @@ class User extends DirectoryObject implements Parsable
     */
     public function setCloudClipboard(?CloudClipboardRoot $value): void {
         $this->getBackingStore()->set('cloudClipboard', $value);
+    }
+
+    /**
+     * Sets the cloudPCs property value. The user's Cloud PCs. Read-only. Nullable.
+     * @param array<CloudPC>|null $value Value to set for the cloudPCs property.
+    */
+    public function setCloudPCs(?array $value): void {
+        $this->getBackingStore()->set('cloudPCs', $value);
     }
 
     /**
@@ -2725,6 +2787,14 @@ class User extends DirectoryObject implements Parsable
     */
     public function setOnPremisesSecurityIdentifier(?string $value): void {
         $this->getBackingStore()->set('onPremisesSecurityIdentifier', $value);
+    }
+
+    /**
+     * Sets the onPremisesSyncBehavior property value. The onPremisesSyncBehavior property
+     * @param OnPremisesSyncBehavior|null $value Value to set for the onPremisesSyncBehavior property.
+    */
+    public function setOnPremisesSyncBehavior(?OnPremisesSyncBehavior $value): void {
+        $this->getBackingStore()->set('onPremisesSyncBehavior', $value);
     }
 
     /**

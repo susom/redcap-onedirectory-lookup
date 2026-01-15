@@ -10,8 +10,10 @@ use Microsoft\Graph\Generated\Storage\FileStorage\Containers\Item\Activate\Activ
 use Microsoft\Graph\Generated\Storage\FileStorage\Containers\Item\Columns\ColumnsRequestBuilder;
 use Microsoft\Graph\Generated\Storage\FileStorage\Containers\Item\Drive\DriveRequestBuilder;
 use Microsoft\Graph\Generated\Storage\FileStorage\Containers\Item\Lock\LockRequestBuilder;
+use Microsoft\Graph\Generated\Storage\FileStorage\Containers\Item\MigrationJobs\MigrationJobsRequestBuilder;
 use Microsoft\Graph\Generated\Storage\FileStorage\Containers\Item\PermanentDelete\PermanentDeleteRequestBuilder;
 use Microsoft\Graph\Generated\Storage\FileStorage\Containers\Item\Permissions\PermissionsRequestBuilder;
+use Microsoft\Graph\Generated\Storage\FileStorage\Containers\Item\ProvisionMigrationContainers\ProvisionMigrationContainersRequestBuilder;
 use Microsoft\Graph\Generated\Storage\FileStorage\Containers\Item\RecycleBin\RecycleBinRequestBuilder;
 use Microsoft\Graph\Generated\Storage\FileStorage\Containers\Item\Restore\RestoreRequestBuilder;
 use Microsoft\Graph\Generated\Storage\FileStorage\Containers\Item\Unlock\UnlockRequestBuilder;
@@ -54,6 +56,13 @@ class FileStorageContainerItemRequestBuilder extends BaseRequestBuilder
     }
     
     /**
+     * Provides operations to manage the migrationJobs property of the microsoft.graph.fileStorageContainer entity.
+    */
+    public function migrationJobs(): MigrationJobsRequestBuilder {
+        return new MigrationJobsRequestBuilder($this->pathParameters, $this->requestAdapter);
+    }
+    
+    /**
      * Provides operations to call the permanentDelete method.
     */
     public function permanentDelete(): PermanentDeleteRequestBuilder {
@@ -65,6 +74,13 @@ class FileStorageContainerItemRequestBuilder extends BaseRequestBuilder
     */
     public function permissions(): PermissionsRequestBuilder {
         return new PermissionsRequestBuilder($this->pathParameters, $this->requestAdapter);
+    }
+    
+    /**
+     * Provides operations to call the provisionMigrationContainers method.
+    */
+    public function provisionMigrationContainers(): ProvisionMigrationContainersRequestBuilder {
+        return new ProvisionMigrationContainersRequestBuilder($this->pathParameters, $this->requestAdapter);
     }
     
     /**
@@ -117,7 +133,7 @@ class FileStorageContainerItemRequestBuilder extends BaseRequestBuilder
     }
 
     /**
-     * Get containers from storage
+     * The collection of active fileStorageContainer resources.
      * @param FileStorageContainerItemRequestBuilderGetRequestConfiguration|null $requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @return Promise<FileStorageContainer|null>
      * @throws Exception
@@ -164,7 +180,7 @@ class FileStorageContainerItemRequestBuilder extends BaseRequestBuilder
     }
 
     /**
-     * Get containers from storage
+     * The collection of active fileStorageContainer resources.
      * @param FileStorageContainerItemRequestBuilderGetRequestConfiguration|null $requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @return RequestInformation
     */

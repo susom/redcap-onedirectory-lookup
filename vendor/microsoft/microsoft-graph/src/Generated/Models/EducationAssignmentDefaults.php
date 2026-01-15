@@ -26,7 +26,7 @@ class EducationAssignmentDefaults extends Entity implements Parsable
     }
 
     /**
-     * Gets the addedStudentAction property value. Class-level default behavior for handling students who are added after the assignment is published. Possible values are: none, assignIfOpen.
+     * Gets the addedStudentAction property value. Class-level default behavior for handling students who are added after the assignment is published. The possible values are: none, assignIfOpen.
      * @return EducationAddedStudentAction|null
     */
     public function getAddedStudentAction(): ?EducationAddedStudentAction {
@@ -38,7 +38,7 @@ class EducationAssignmentDefaults extends Entity implements Parsable
     }
 
     /**
-     * Gets the addToCalendarAction property value. Optional field to control adding assignments to students' and teachers' calendars when the assignment is published. The possible values are: none, studentsAndPublisher, studentsAndTeamOwners, unknownFutureValue, and studentsOnly. Use the Prefer: include-unknown-enum-members request header to get the following value in this evolvable enum: studentsOnly. The default value is none.
+     * Gets the addToCalendarAction property value. Optional field to control adding assignments to students' and teachers' calendars when the assignment is published. The possible values are: none, studentsAndPublisher, studentsAndTeamOwners, unknownFutureValue, and studentsOnly. Use the Prefer: include-unknown-enum-members request header to get the following members in this evolvable enum: studentsOnly. The default value is none.
      * @return EducationAddToCalendarOptions|null
     */
     public function getAddToCalendarAction(): ?EducationAddToCalendarOptions {
@@ -100,7 +100,7 @@ class EducationAssignmentDefaults extends Entity implements Parsable
     }
 
     /**
-     * Sets the addedStudentAction property value. Class-level default behavior for handling students who are added after the assignment is published. Possible values are: none, assignIfOpen.
+     * Sets the addedStudentAction property value. Class-level default behavior for handling students who are added after the assignment is published. The possible values are: none, assignIfOpen.
      * @param EducationAddedStudentAction|null $value Value to set for the addedStudentAction property.
     */
     public function setAddedStudentAction(?EducationAddedStudentAction $value): void {
@@ -108,7 +108,7 @@ class EducationAssignmentDefaults extends Entity implements Parsable
     }
 
     /**
-     * Sets the addToCalendarAction property value. Optional field to control adding assignments to students' and teachers' calendars when the assignment is published. The possible values are: none, studentsAndPublisher, studentsAndTeamOwners, unknownFutureValue, and studentsOnly. Use the Prefer: include-unknown-enum-members request header to get the following value in this evolvable enum: studentsOnly. The default value is none.
+     * Sets the addToCalendarAction property value. Optional field to control adding assignments to students' and teachers' calendars when the assignment is published. The possible values are: none, studentsAndPublisher, studentsAndTeamOwners, unknownFutureValue, and studentsOnly. Use the Prefer: include-unknown-enum-members request header to get the following members in this evolvable enum: studentsOnly. The default value is none.
      * @param EducationAddToCalendarOptions|null $value Value to set for the addToCalendarAction property.
     */
     public function setAddToCalendarAction(?EducationAddToCalendarOptions $value): void {

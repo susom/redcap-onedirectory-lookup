@@ -1,5 +1,13 @@
 # Change Log
 
+# 1.2.x
+
+## 1.2.2
+
+### Added - 2025-10-31
+
+- Compatibility with PHP 8.4
+
 ## 1.2.1
 
 ### Added - 2023-11-08
