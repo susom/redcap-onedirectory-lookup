@@ -255,7 +255,8 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
         if (!$this->secretManager) {
             $this->secretManager = new GoogleSecretManager(
                 $this->getSystemSetting('google-cloud-project-id'),
-                ''
+                '',
+                $this
             );
         }
         return $this->secretManager;

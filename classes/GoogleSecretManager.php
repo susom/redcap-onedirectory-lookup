@@ -12,6 +12,7 @@ class GoogleSecretManager {
     private $restClient;
     private $projectId;
     private $keyJson;
+    private $module;
 
     // ---- Pure HTTP fallback (avoids protobuf parsing issues entirely) ----
     private const METADATA_TOKEN_URL = 'http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/token';
@@ -20,11 +21,13 @@ class GoogleSecretManager {
     private ?string $cachedHttpAccessToken = null;
     private int $cachedHttpAccessTokenExpiresAt = 0;
 
-    public function __construct(string $projectId, ?string $keyJson = null) {
+    public function __construct(string $projectId, ?string $keyJson = null, $module = null) {
         $this->projectId = $projectId;
         $this->keyJson = $keyJson;
-        error_log('[GoogleSecretManager] Initialized with project: ' . $projectId . ', using ' . ($keyJson ? 'provided credentials' : 'default credentials'));
+        $this->module = $module;
+        $this->module->emDebug('[GoogleSecretManager] Initialized with project: ' . $projectId . ', using ' . ($keyJson ? 'provided credentials' : 'default credentials'));
     }
+
 
     private function getClient(?string $transport = null): SecretManagerServiceClient {
         // We keep two clients so we can fail over from gRPC -> REST.
@@ -54,7 +57,7 @@ class GoogleSecretManager {
         }
 
         try {
-            error_log('[GoogleSecretManager] Initializing Secret Manager client (transport=' . $transport . ')...');
+            $this->module->emDebug('[GoogleSecretManager] Initializing Secret Manager client (transport=' . $transport . ')...');
 
             $opts = [
                 // IMPORTANT: forcing REST can avoid GPBDecodeException in some environments.
@@ -62,26 +65,26 @@ class GoogleSecretManager {
             ];
 
             if ($this->keyJson) {
-                error_log('[GoogleSecretManager] Using provided JSON credentials');
+                $this->module->emDebug('[GoogleSecretManager] Using provided JSON credentials');
                 $credentialsArray = json_decode($this->keyJson, true);
                 if (!is_array($credentialsArray)) {
-                    error_log('[GoogleSecretManager] ERROR: Failed to decode credentials JSON');
+                    $this->module->emDebug('[GoogleSecretManager] ERROR: Failed to decode credentials JSON');
                     throw new \Exception('Invalid credentials JSON format');
                 }
                 $opts['credentialsConfig'] = ['keyFile' => $credentialsArray];
             } else {
-                error_log('[GoogleSecretManager] Using default/environment credentials (Application Default Credentials)');
+                $this->module->emDebug('[GoogleSecretManager] Using default/environment credentials (Application Default Credentials)');
             }
 
             $this->{$prop} = new SecretManagerServiceClient($opts);
-            error_log('[GoogleSecretManager] Secret Manager client initialized successfully (transport=' . $transport . ')');
+            $this->module->emDebug('[GoogleSecretManager] Secret Manager client initialized successfully (transport=' . $transport . ')');
             return $this->{$prop};
         } catch (ApiException $e) {
-            error_log('[GoogleSecretManager] ApiException during client initialization: ' . $e->getMessage());
-            error_log('[GoogleSecretManager] Status code: ' . $e->getCode());
+            $this->module->emDebug('[GoogleSecretManager] ApiException during client initialization: ' . $e->getMessage());
+            $this->module->emDebug('[GoogleSecretManager] Status code: ' . $e->getCode());
             throw $e;
         } catch (\Exception $e) {
-            error_log('[GoogleSecretManager] Exception during client initialization: ' . $e->getMessage());
+            $this->module->emDebug('[GoogleSecretManager] Exception during client initialization: ' . $e->getMessage());
             throw $e;
         }
     }
@@ -95,24 +98,24 @@ class GoogleSecretManager {
      */
     public function getSecret(string $key): string {
         try {
-            error_log('[GoogleSecretManager] Fetching secret: ' . $key);
+            $this->module->emDebug('[GoogleSecretManager] Fetching secret: ' . $key);
 
             // Build the full secret resource name
             $name = $this->getClient()->secretVersionName($this->projectId, $key, 'latest');
-            error_log('[GoogleSecretManager] Built secret resource name for key: ' . $key);
+            $this->module->emDebug('[GoogleSecretManager] Built secret resource name for key: ' . $key);
 
             // Build and send the access request
             $request = AccessSecretVersionRequest::build($name);
-            error_log('[GoogleSecretManager] Sending access request for secret: ' . $key);
+            $this->module->emDebug('[GoogleSecretManager] Sending access request for secret: ' . $key);
 
             $response = $this->getClient()->accessSecretVersion($request);
-            error_log('[GoogleSecretManager] Successfully retrieved secret: ' . $key);
+            $this->module->emDebug('[GoogleSecretManager] Successfully retrieved secret: ' . $key);
 
             $secretValue = $response->getPayload()->getData();
             if (empty($secretValue)) {
-                error_log('[GoogleSecretManager] WARNING: Retrieved empty value for secret: ' . $key);
+                $this->module->emDebug('[GoogleSecretManager] WARNING: Retrieved empty value for secret: ' . $key);
             } else {
-                error_log('[GoogleSecretManager] Secret retrieved successfully, value length: ' . strlen($secretValue) . ' bytes');
+                $this->module->emDebug('[GoogleSecretManager] Secret retrieved successfully, value length: ' . strlen($secretValue) . ' bytes');
             }
 
             return $secretValue;
@@ -121,15 +124,15 @@ class GoogleSecretManager {
             // because the client still converts JSON -> protobuf internally.
             // In some prod networks/proxies, the response can be truncated or altered.
             // The most reliable fix is to bypass the library and call the REST API directly.
-            error_log('[GoogleSecretManager] GPBDecodeException for secret ' . $key . ': ' . $e->getMessage());
-            error_log('[GoogleSecretManager] Falling back to pure HTTP Secret Manager REST call...');
+            $this->module->emDebug('[GoogleSecretManager] GPBDecodeException for secret ' . $key . ': ' . $e->getMessage());
+            $this->module->emDebug('[GoogleSecretManager] Falling back to pure HTTP Secret Manager REST call...');
 
             $secretValue = $this->getSecretViaHttp($key, 'latest');
-            error_log('[GoogleSecretManager] Successfully retrieved secret via pure HTTP: ' . $key);
+            $this->module->emDebug('[GoogleSecretManager] Successfully retrieved secret via pure HTTP: ' . $key);
             if (empty($secretValue)) {
-                error_log('[GoogleSecretManager] WARNING: Retrieved empty value for secret (pure HTTP): ' . $key);
+                $this->module->emDebug('[GoogleSecretManager] WARNING: Retrieved empty value for secret (pure HTTP): ' . $key);
             } else {
-                error_log('[GoogleSecretManager] Secret retrieved successfully via pure HTTP, value length: ' . strlen($secretValue) . ' bytes');
+                $this->module->emDebug('[GoogleSecretManager] Secret retrieved successfully via pure HTTP, value length: ' . strlen($secretValue) . ' bytes');
             }
 
             return $secretValue;
@@ -140,15 +143,15 @@ class GoogleSecretManager {
             // Retry using REST.
             $msg = $e->getMessage();
             if (stripos($msg, 'gRPC support has been requested') !== false) {
-                error_log('[GoogleSecretManager] gRPC extension missing: ' . $msg);
-                error_log('[GoogleSecretManager] Falling back to pure HTTP Secret Manager REST call...');
+                $this->module->emDebug('[GoogleSecretManager] gRPC extension missing: ' . $msg);
+                $this->module->emDebug('[GoogleSecretManager] Falling back to pure HTTP Secret Manager REST call...');
 
                 $secretValue = $this->getSecretViaHttp($key, 'latest');
-                error_log('[GoogleSecretManager] Successfully retrieved secret via pure HTTP: ' . $key);
+                $this->module->emDebug('[GoogleSecretManager] Successfully retrieved secret via pure HTTP: ' . $key);
                 if (empty($secretValue)) {
-                    error_log('[GoogleSecretManager] WARNING: Retrieved empty value for secret (pure HTTP): ' . $key);
+                    $this->module->emDebug('[GoogleSecretManager] WARNING: Retrieved empty value for secret (pure HTTP): ' . $key);
                 } else {
-                    error_log('[GoogleSecretManager] Secret retrieved successfully via pure HTTP, value length: ' . strlen($secretValue) . ' bytes');
+                    $this->module->emDebug('[GoogleSecretManager] Secret retrieved successfully via pure HTTP, value length: ' . strlen($secretValue) . ' bytes');
                 }
 
                 return $secretValue;
@@ -156,13 +159,13 @@ class GoogleSecretManager {
 
             throw $e;
         } catch (ApiException $e) {
-            error_log('[GoogleSecretManager] ApiException fetching secret ' . $key . ': ' . $e->getMessage());
-            error_log('[GoogleSecretManager] Status code: ' . $e->getCode());
-            error_log('[GoogleSecretManager] Details: ' . $e->getDetails());
+            $this->module->emDebug('[GoogleSecretManager] ApiException fetching secret ' . $key . ': ' . $e->getMessage());
+            $this->module->emDebug('[GoogleSecretManager] Status code: ' . $e->getCode());
+            $this->module->emDebug('[GoogleSecretManager] Details: ' . $e->getDetails());
             throw $e;
         } catch (\Exception $e) {
-            error_log('[GoogleSecretManager] Exception fetching secret ' . $key . ': ' . $e->getMessage());
-            error_log('[GoogleSecretManager] Exception class: ' . get_class($e));
+            $this->module->emDebug('[GoogleSecretManager] Exception fetching secret ' . $key . ': ' . $e->getMessage());
+            $this->module->emDebug('[GoogleSecretManager] Exception class: ' . get_class($e));
             throw $e;
         }
     }
