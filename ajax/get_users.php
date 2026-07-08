@@ -33,15 +33,10 @@ if (!$access['allow']) {
 $isSurveyPath = ($access['source'] !== 'redcap');
 
 try {
-    // Neutralize the search term: allow only characters meaningful for names/emails.
-    // This strips KQL/OData control characters (quotes, parentheses, colons, etc.) so
-    // the term cannot alter the structure of the Microsoft Graph query (CWE-943/CWE-74).
-    $rawTerm = isset($_GET['term']) ? (string)$_GET['term'] : '';
-    $term = preg_replace('/[^\p{L}\p{N}\s@._\'-]/u', ' ', $rawTerm);
-    $term = trim(preg_replace('/\s+/u', ' ', (string)$term));
-
-    // Require a minimum meaningful length. This rejects punctuation-only terms and
-    // single-character wildcards that would otherwise enumerate the directory.
+    // Neutralize the search term (strips KQL/OData control characters so it cannot alter
+    // the Graph query structure — CWE-943/CWE-74). Then require a minimum meaningful length
+    // to reject punctuation-only / single-character terms that would enumerate the directory.
+    $term = MSGraphClient::sanitizeSearchTerm(isset($_GET['term']) ? (string)$_GET['term'] : '');
     if (mb_strlen($term) < 2) {
         echo json_encode($emptyResult);
         return;
@@ -71,18 +66,13 @@ try {
     } else {
         // next_page must be an absolute Microsoft Graph pagination URL. Rejecting anything
         // else prevents SSRF / bearer-token exfiltration (the Graph access token is attached
-        // to whatever URL this becomes). The authoritative check is in MSGraphClient.
+        // to whatever URL this becomes). Same allowlist the pagination fetch enforces.
         $nextLink = isset($_GET['next_page']) ? (string)$_GET['next_page'] : '';
-        if ($nextLink !== '') {
-            $parts = parse_url($nextLink);
-            $host = is_array($parts) ? strtolower($parts['host'] ?? '') : '';
-            $scheme = is_array($parts) ? strtolower($parts['scheme'] ?? '') : '';
-            if ($scheme !== 'https' || $host !== 'graph.microsoft.com') {
-                echo json_encode($emptyResult);
-                return;
-            }
-        } else {
+        if ($nextLink === '') {
             $nextLink = null;
+        } elseif (!MSGraphClient::isAllowedGraphUrl($nextLink)) {
+            echo json_encode($emptyResult);
+            return;
         }
     }
 

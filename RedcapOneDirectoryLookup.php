@@ -221,13 +221,13 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
      * Pure authorization decision for a lookup request.
      *
      * Order of evaluation:
-     *  1. A full REDCap session (data-entry forms, logged-in surveys) is always allowed.
-     *  2. On a development server, a local bypass is allowed ONLY when it has been
-     *     explicitly opted into (see $devBypassEnabled). A dev flag alone is not enough,
-     *     so a stray development flag can never open anonymous Graph access in production.
-     *  3. Otherwise (unauthenticated survey context) the request must resolve to a valid
-     *     survey of a project where this module is enabled, AND carry a Shibboleth
-     *     (webauth) identity. Anonymous requests are denied.
+     *  1. A full REDCap session (data-entry form, logged-in survey) is always allowed.
+     *  2. Otherwise the request MUST resolve to a valid survey of a project where this
+     *     module is enabled — a lookup is never permitted outside a form/survey context.
+     *  3. Within that survey context, a Shibboleth (webauth) identity is allowed.
+     *  4. Within that survey context, a development server may allow the call without
+     *     webauth, but only when explicitly opted in ($devBypassEnabled). A dev flag alone
+     *     is never enough, and it can never bypass the survey-context requirement.
      *
      * Kept side-effect free so it can be unit tested.
      *
@@ -249,29 +249,32 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
         bool $isDev,
         bool $devBypassEnabled = false
     ): array {
+        // 1. A full REDCap session (data-entry form or logged-in survey) is always allowed.
         if ($isAuthenticated) {
             return ['allow' => true, 'identity' => $redcapUser ?: 'redcap-user', 'source' => 'redcap', 'reason' => 'authenticated'];
         }
 
-        // Development bypass is intentionally double-gated: it requires BOTH a development
-        // server AND an explicit opt-in setting. This prevents an anonymous Graph hole from
-        // ever being opened by the development flag alone.
-        if ($isDev && $devBypassEnabled) {
-            return ['allow' => true, 'identity' => 'dev-bypass', 'source' => 'dev', 'reason' => 'dev-server-optin'];
-        }
-
-        // Unauthenticated (survey) context: require a valid survey of a module-enabled project.
+        // 2. Every unauthenticated request must resolve to a valid survey of a module-enabled
+        //    project. A lookup is NEVER permitted outside a form/survey context.
         if (!is_array($surveyContext) || empty($surveyContext['project_id']) || !$moduleEnabledOnContextProject) {
             return ['allow' => false, 'identity' => null, 'source' => 'none', 'reason' => 'invalid-survey-context'];
         }
 
-        // ...and require a Shibboleth (webauth) identity for the survey respondent.
+        // 3. Within that context, the respondent may authenticate via Shibboleth (webauth).
         $remoteUser = is_string($remoteUser) ? trim($remoteUser) : '';
-        if ($remoteUser === '') {
-            return ['allow' => false, 'identity' => null, 'source' => 'none', 'reason' => 'webauth-required'];
+        if ($remoteUser !== '') {
+            return ['allow' => true, 'identity' => $remoteUser, 'source' => 'webauth', 'reason' => 'webauth-authenticated'];
         }
 
-        return ['allow' => true, 'identity' => $remoteUser, 'source' => 'webauth', 'reason' => 'webauth-authenticated'];
+        // 4. Development-server convenience: skip webauth within a valid survey context only,
+        //    and only when explicitly opted in. A dev flag alone can never open access, and
+        //    this can never bypass the survey-context requirement above.
+        if ($isDev && $devBypassEnabled) {
+            return ['allow' => true, 'identity' => 'dev-bypass', 'source' => 'dev', 'reason' => 'dev-server-optin'];
+        }
+
+        // 5. Valid context, but no webauth identity and no opted-in dev bypass.
+        return ['allow' => false, 'identity' => null, 'source' => 'none', 'reason' => 'webauth-required'];
     }
 
 

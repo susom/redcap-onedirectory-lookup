@@ -248,7 +248,7 @@ class MSGraphClient
         // SSRF guard: only ever attach the Graph bearer token to a genuine Microsoft
         // Graph URL. Without this, a caller-supplied next_page (e.g. from get_users.php)
         // could exfiltrate the app-only access token to an attacker-controlled host.
-        if (!$this->isAllowedGraphUrl($url)) {
+        if (!self::isAllowedGraphUrl($url)) {
             $this->module->emError('[MSGraphClient] Refusing to fetch non-Graph pagination URL: ' . $url);
             return [];
         }
@@ -331,7 +331,7 @@ class MSGraphClient
     {
         // Build Graph $search query string across key properties.
         // The term is allowlist-sanitized so it is treated strictly as a literal value.
-        $term = $this->sanitizeSearchTerm($searchTerm);
+        $term = self::sanitizeSearchTerm($searchTerm);
 
         // Use displayName, userPrincipalName, mail, mailNickname, givenName, surname
         return sprintf(
@@ -353,10 +353,13 @@ class MSGraphClient
      * parentheses, colons, backslashes, etc.) is stripped, so the term cannot alter
      * the structure of the Microsoft Graph query (CWE-943 / CWE-74).
      *
+     * Shared by the AJAX boundary (get_users.php) and the Graph query builder so there is
+     * a single definition of what a valid search term looks like.
+     *
      * @param string $searchTerm
      * @return string Sanitized, whitespace-collapsed term.
      */
-    private function sanitizeSearchTerm(string $searchTerm): string
+    public static function sanitizeSearchTerm(string $searchTerm): string
     {
         $term = preg_replace('/[^\p{L}\p{N}\s@._\'-]/u', ' ', $searchTerm);
         return trim((string)preg_replace('/\s+/u', ' ', (string)$term));
@@ -369,10 +372,13 @@ class MSGraphClient
      * This is the authoritative guard against SSRF / access-token exfiltration through
      * caller-supplied pagination links.
      *
+     * Shared by the AJAX boundary (get_users.php) and the pagination fetch so there is a
+     * single definition of an acceptable Graph URL.
+     *
      * @param string $url
      * @return bool
      */
-    private function isAllowedGraphUrl(string $url): bool
+    public static function isAllowedGraphUrl(string $url): bool
     {
         $parts = parse_url($url);
         if (!is_array($parts)) {
@@ -399,7 +405,7 @@ class MSGraphClient
         // On a first-page request, refuse empty/too-short terms so a blank or
         // punctuation-only search cannot enumerate the directory. (Pagination requests
         // carry the query in $nextLink and are validated separately.)
-        if (is_null($nextLink) && mb_strlen($this->sanitizeSearchTerm($searchTerm)) < 2) {
+        if (is_null($nextLink) && mb_strlen(self::sanitizeSearchTerm($searchTerm)) < 2) {
             return [
                 'count' => null,
                 'users' => [],
