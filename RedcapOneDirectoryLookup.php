@@ -222,7 +222,9 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
      *
      * Order of evaluation:
      *  1. A full REDCap session (data-entry forms, logged-in surveys) is always allowed.
-     *  2. On a development server, a local bypass is allowed (never true in production).
+     *  2. On a development server, a local bypass is allowed ONLY when it has been
+     *     explicitly opted into (see $devBypassEnabled). A dev flag alone is not enough,
+     *     so a stray development flag can never open anonymous Graph access in production.
      *  3. Otherwise (unauthenticated survey context) the request must resolve to a valid
      *     survey of a project where this module is enabled, AND carry a Shibboleth
      *     (webauth) identity. Anonymous requests are denied.
@@ -235,6 +237,7 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
      * @param array|null  $surveyContext                 Result of Survey::getSurveyContextFromSurveyHash()
      * @param bool        $moduleEnabledOnContextProject Whether this module is enabled on the survey's project
      * @param bool        $isDev                         Whether this is a development server
+     * @param bool        $devBypassEnabled              Whether the anonymous dev bypass has been explicitly enabled
      * @return array{allow:bool, identity:?string, source:string, reason:string}
      */
     public static function decideLookupAccess(
@@ -243,14 +246,18 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
         ?string $remoteUser,
         ?array $surveyContext,
         bool $moduleEnabledOnContextProject,
-        bool $isDev
+        bool $isDev,
+        bool $devBypassEnabled = false
     ): array {
         if ($isAuthenticated) {
             return ['allow' => true, 'identity' => $redcapUser ?: 'redcap-user', 'source' => 'redcap', 'reason' => 'authenticated'];
         }
 
-        if ($isDev) {
-            return ['allow' => true, 'identity' => 'dev-bypass', 'source' => 'dev', 'reason' => 'dev-server'];
+        // Development bypass is intentionally double-gated: it requires BOTH a development
+        // server AND an explicit opt-in setting. This prevents an anonymous Graph hole from
+        // ever being opened by the development flag alone.
+        if ($isDev && $devBypassEnabled) {
+            return ['allow' => true, 'identity' => 'dev-bypass', 'source' => 'dev', 'reason' => 'dev-server-optin'];
         }
 
         // Unauthenticated (survey) context: require a valid survey of a module-enabled project.
@@ -299,7 +306,8 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
             $this->getRemoteUser(),
             $surveyContext,
             $enabledOnProject,
-            self::isDevServer()
+            self::isDevServer(),
+            $this->isDevAnonymousBypassEnabled()
         );
 
         // The survey's project (from the validated hash) is authoritative over any URL pid.
@@ -309,26 +317,95 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
 
 
     /**
-     * Whether the given identity has exceeded the per-minute lookup rate limit.
+     * Whether the anonymous development bypass has been explicitly opted into.
      *
-     * Only meaningful for the unauthenticated survey (webauth) path; logged-in REDCap
+     * This is only consulted on development servers (see decideLookupAccess()); on a
+     * production server it has no effect. Defaults to false so the bypass is off unless
+     * an administrator deliberately enables it.
+     *
+     * @return bool
+     */
+    public function isDevAnonymousBypassEnabled(): bool
+    {
+        return (int)$this->getSystemSetting('allow-dev-anonymous-bypass') === 1;
+    }
+
+
+    /**
+     * The configured per-minute survey lookup rate limit (default 30).
+     *
+     * @return int
+     */
+    public function getSurveyLookupRateLimit(): int
+    {
+        $limit = (int)$this->getSystemSetting('survey-lookup-rate-limit');
+        return $limit > 0 ? $limit : 30;
+    }
+
+
+    /**
+     * Whether the given identity has exceeded the per-minute limit for a lookup action.
+     *
+     * Each action uses its own throttle bucket (keyed by $message) so a high-volume,
+     * low-sensitivity action (e.g. profile-photo preloads, which fan out to one request
+     * per search result) does not exhaust the budget of another action. The counter is
+     * driven by the audit-log rows written via logLookupAction() with the same $message.
+     *
+     * Only meaningful for the unauthenticated survey (webauth/dev) path; logged-in REDCap
      * users are not throttled here.
+     *
+     * @param string $message  Throttle/audit bucket key (e.g. 'odlookup_manager').
+     * @param string $identity Authenticated identity (SUNet / REDCap user).
+     * @param int    $limit    Max occurrences allowed within the 60s window.
+     * @return bool True if the identity is over the limit and should be blocked.
+     */
+    public function isActionRateLimited(string $message, string $identity, int $limit): bool
+    {
+        if ($limit <= 0) {
+            $limit = 30;
+        }
+        return $this->throttle("message = ? and username = ?", [$message, $identity], 60, $limit);
+    }
+
+
+    /**
+     * Write an audit log entry (also the throttle counter) attributing a lookup action
+     * to a specific identity.
+     *
+     * @param string $message  Throttle/audit bucket key (e.g. 'odlookup_manager').
+     * @param string $identity Authenticated identity (SUNet / REDCap user).
+     * @param string $source   'webauth' | 'dev' | 'redcap'
+     * @param string $detail   Compact, already-safe detail (search term or Graph user id).
+     * @return void
+     */
+    public function logLookupAction(string $message, string $identity, string $source, string $detail): void
+    {
+        try {
+            $this->log($message, [
+                'username'  => $identity,
+                'od_source' => $source,
+                'od_term'   => mb_substr($detail, 0, 100),
+            ]);
+        } catch (\Throwable $e) {
+            $this->emError('[RedcapOneDirectoryLookup] Failed to write lookup audit log: ' . $e->getMessage());
+        }
+    }
+
+
+    /**
+     * Whether the given identity has exceeded the per-minute search rate limit.
      *
      * @param string $identity
      * @return bool True if the identity is over the limit and should be blocked.
      */
     public function isLookupRateLimited(string $identity): bool
     {
-        $limit = (int)$this->getSystemSetting('survey-lookup-rate-limit');
-        if ($limit <= 0) {
-            $limit = 30;
-        }
-        return $this->throttle("message = ? and username = ?", ['odlookup_search', $identity], 60, $limit);
+        return $this->isActionRateLimited('odlookup_search', $identity, $this->getSurveyLookupRateLimit());
     }
 
 
     /**
-     * Write an audit log entry attributing a lookup to a specific identity.
+     * Write an audit log entry attributing a search to a specific identity.
      *
      * @param string $identity  Authenticated identity (SUNet / REDCap user).
      * @param string $source    'webauth' | 'dev' | 'redcap'
@@ -337,15 +414,7 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
      */
     public function logLookup(string $identity, string $source, string $term): void
     {
-        try {
-            $this->log('odlookup_search', [
-                'username'  => $identity,
-                'od_source' => $source,
-                'od_term'   => mb_substr($term, 0, 100),
-            ]);
-        } catch (\Throwable $e) {
-            $this->emError('[RedcapOneDirectoryLookup] Failed to write lookup audit log: ' . $e->getMessage());
-        }
+        $this->logLookupAction('odlookup_search', $identity, $source, $term);
     }
 
 

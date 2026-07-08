@@ -15,8 +15,21 @@ if (!$access['allow']) {
     exit('Not authorized');
 }
 
+$userId = $_GET['user_id'] ?? null;
+
+// The unauthenticated survey path (webauth/dev) gets the same extra restrictions as the
+// search endpoint: a per-identity rate limit and an audit trail of who looked up whom.
+// Logged-in REDCap users are not throttled or logged here.
+if ($access['source'] !== 'redcap') {
+    if ($module->isActionRateLimited('odlookup_manager', $access['identity'], $module->getSurveyLookupRateLimit())) {
+        http_response_code(429);
+        echo json_encode(['status' => 'error', 'message' => 'Too many lookups. Please wait a moment and try again.']);
+        return;
+    }
+    $module->logLookupAction('odlookup_manager', $access['identity'], $access['source'], (string)($userId ?? ''));
+}
+
 try{
-    $userId = $_GET['user_id'] ?? null;
     if (!$userId) {
         throw new \Exception("Missing user_id parameter");
     }

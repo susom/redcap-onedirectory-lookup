@@ -29,6 +29,19 @@ if (!$userId) {
     exit('user_id required');
 }
 
+// The unauthenticated survey path (webauth/dev) gets the same extra restrictions as the
+// search endpoint: a per-identity rate limit and an audit trail. Photos are requested
+// once per rendered search result, so they use their own, looser throttle bucket to
+// avoid breaking legitimate survey rendering while still bounding bulk enumeration.
+if ($access['source'] !== 'redcap') {
+    $photoLimit = $module->getSurveyLookupRateLimit() * 10;
+    if ($module->isActionRateLimited('odlookup_photo', $access['identity'], $photoLimit)) {
+        http_response_code(429);
+        exit('Too many photo requests. Please wait a moment and try again.');
+    }
+    $module->logLookupAction('odlookup_photo', $access['identity'], $access['source'], (string)$userId);
+}
+
 try {
     // Get access token (with system settings caching)
     $msGraphClient = $module->getMSGraphClient();

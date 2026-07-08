@@ -343,6 +343,12 @@
             "type": "text"
         },
         {
+            "key": "allow-dev-anonymous-bypass",
+            "name": "<b>Allow anonymous lookup bypass on development servers</b><br><i>(optional, default off)</i> When checked <u>and</u> REDCap is running as a development server, lookup endpoints skip the survey/webauth authorization checks. Leave unchecked in production; a development flag alone will not open anonymous Microsoft Graph access.",
+            "required": false,
+            "type": "checkbox"
+        },
+        {
             "key": "google-cloud-project-id",
             "name": "<b>Google Project Id:</b> This will store MS Graph API credentials in Secret Manager. (e.g., my-gcp-project). Make sure you create the following SECRET in Secrets:<ol><li>MS_GRAPH_CLIENT_ID</li><li>MS_GRAPH_CLIENT_SECRET</li><li>MS_GRAPH_TENANT_ID</li></ol> ",
             "required": true,
