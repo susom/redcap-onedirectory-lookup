@@ -63,6 +63,20 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
     private $secretManager = null;
 
     /**
+     * Whether the current page render is a survey page (set in redcap_survey_page_top).
+     *
+     * @var bool
+     */
+    private $isSurvey = false;
+
+    /**
+     * Survey hash for the current survey page render (set in redcap_survey_page_top).
+     *
+     * @var string|null
+     */
+    private $surveyHash = null;
+
+    /**
      * Module constructor.
      *
      * Initializes a default Guzzle client; other dependencies are created lazily.
@@ -83,6 +97,10 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
 
     public function redcap_survey_page_top($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance)
     {
+        // Remember the survey context so the injected JS can route lookup requests
+        // through /webauth (carrying the Shibboleth identity) and pass the survey hash.
+        $this->isSurvey = true;
+        $this->surveyHash = $survey_hash;
         $this->processFields($instrument);
     }
 
@@ -100,6 +118,191 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
     {
         // Build search object
         return $this->getMSGraphClient()->searchUsers($term, $nextPage, $companyName);
+    }
+
+
+    /**
+     * Whether the current page render is a survey page.
+     *
+     * @return bool
+     */
+    public function getIsSurvey(): bool
+    {
+        return $this->isSurvey;
+    }
+
+
+    /**
+     * Survey hash for the current survey page render (null on non-survey pages).
+     *
+     * @return string|null
+     */
+    public function getSurveyHash(): ?string
+    {
+        return $this->surveyHash;
+    }
+
+
+    /**
+     * Read the Shibboleth-authenticated user id from the web server.
+     *
+     * Only $_SERVER['REMOTE_USER'] is trusted: it is set by Apache/mod_shib for requests
+     * that pass through the protected /webauth location. Client-supplied headers (which
+     * would land in $_SERVER['HTTP_*']) are intentionally ignored.
+     *
+     * @return string
+     */
+    public function getRemoteUser(): string
+    {
+        $u = $_SERVER['REMOTE_USER'] ?? '';
+        return is_string($u) ? trim($u) : '';
+    }
+
+
+    /**
+     * Whether this is a REDCap development server.
+     *
+     * Gated solely on the server-controlled $GLOBALS['is_development_server'] flag.
+     * The HTTP Host header is deliberately NOT consulted (an attacker can spoof it to
+     * trigger a dev bypass in production).
+     *
+     * @return bool
+     */
+    public static function isDevServer(): bool
+    {
+        return isset($GLOBALS['is_development_server']) && (string)$GLOBALS['is_development_server'] === '1';
+    }
+
+
+    /**
+     * Pure authorization decision for a lookup request.
+     *
+     * Order of evaluation:
+     *  1. A full REDCap session (data-entry forms, logged-in surveys) is always allowed.
+     *  2. On a development server, a local bypass is allowed (never true in production).
+     *  3. Otherwise (unauthenticated survey context) the request must resolve to a valid
+     *     survey of a project where this module is enabled, AND carry a Shibboleth
+     *     (webauth) identity. Anonymous requests are denied.
+     *
+     * Kept side-effect free so it can be unit tested.
+     *
+     * @param bool        $isAuthenticated               framework->isAuthenticated()
+     * @param string|null $redcapUser                    Current REDCap username (if any)
+     * @param string|null $remoteUser                    Shibboleth REMOTE_USER (if any)
+     * @param array|null  $surveyContext                 Result of Survey::getSurveyContextFromSurveyHash()
+     * @param bool        $moduleEnabledOnContextProject Whether this module is enabled on the survey's project
+     * @param bool        $isDev                         Whether this is a development server
+     * @return array{allow:bool, identity:?string, source:string, reason:string}
+     */
+    public static function decideLookupAccess(
+        bool $isAuthenticated,
+        ?string $redcapUser,
+        ?string $remoteUser,
+        ?array $surveyContext,
+        bool $moduleEnabledOnContextProject,
+        bool $isDev
+    ): array {
+        if ($isAuthenticated) {
+            return ['allow' => true, 'identity' => $redcapUser ?: 'redcap-user', 'source' => 'redcap', 'reason' => 'authenticated'];
+        }
+
+        if ($isDev) {
+            return ['allow' => true, 'identity' => 'dev-bypass', 'source' => 'dev', 'reason' => 'dev-server'];
+        }
+
+        // Unauthenticated (survey) context: require a valid survey of a module-enabled project.
+        if (!is_array($surveyContext) || empty($surveyContext['project_id']) || !$moduleEnabledOnContextProject) {
+            return ['allow' => false, 'identity' => null, 'source' => 'none', 'reason' => 'invalid-survey-context'];
+        }
+
+        // ...and require a Shibboleth (webauth) identity for the survey respondent.
+        $remoteUser = is_string($remoteUser) ? trim($remoteUser) : '';
+        if ($remoteUser === '') {
+            return ['allow' => false, 'identity' => null, 'source' => 'none', 'reason' => 'webauth-required'];
+        }
+
+        return ['allow' => true, 'identity' => $remoteUser, 'source' => 'webauth', 'reason' => 'webauth-authenticated'];
+    }
+
+
+    /**
+     * Authorize the current lookup request, gathering the live inputs for decideLookupAccess().
+     *
+     * @return array{allow:bool, identity:?string, source:string, reason:string, projectId:mixed}
+     */
+    public function authorizeLookup(): array
+    {
+        $isAuth = $this->framework->isAuthenticated();
+
+        $redcapUser = null;
+        if ($isAuth) {
+            $user = $this->framework->getUser();
+            $redcapUser = $user ? $user->getUsername() : null;
+        }
+
+        $surveyContext = null;
+        $enabledOnProject = false;
+        $hash = isset($_GET['survey_hash']) ? (string)$_GET['survey_hash'] : '';
+        if (!$isAuth && $hash !== '' && class_exists('\Survey')) {
+            $surveyContext = \Survey::getSurveyContextFromSurveyHash($hash);
+            if (is_array($surveyContext) && !empty($surveyContext['project_id'])) {
+                $enabledOnProject = $this->framework->isModuleEnabled($this->PREFIX, (int)$surveyContext['project_id']);
+            }
+        }
+
+        $decision = self::decideLookupAccess(
+            $isAuth,
+            $redcapUser,
+            $this->getRemoteUser(),
+            $surveyContext,
+            $enabledOnProject,
+            self::isDevServer()
+        );
+
+        // The survey's project (from the validated hash) is authoritative over any URL pid.
+        $decision['projectId'] = $surveyContext['project_id'] ?? $this->getProjectId();
+        return $decision;
+    }
+
+
+    /**
+     * Whether the given identity has exceeded the per-minute lookup rate limit.
+     *
+     * Only meaningful for the unauthenticated survey (webauth) path; logged-in REDCap
+     * users are not throttled here.
+     *
+     * @param string $identity
+     * @return bool True if the identity is over the limit and should be blocked.
+     */
+    public function isLookupRateLimited(string $identity): bool
+    {
+        $limit = (int)$this->getSystemSetting('survey-lookup-rate-limit');
+        if ($limit <= 0) {
+            $limit = 30;
+        }
+        return $this->throttle("message = ? and username = ?", ['odlookup_search', $identity], 60, $limit);
+    }
+
+
+    /**
+     * Write an audit log entry attributing a lookup to a specific identity.
+     *
+     * @param string $identity  Authenticated identity (SUNet / REDCap user).
+     * @param string $source    'webauth' | 'dev' | 'redcap'
+     * @param string $term      The (already-sanitized) search term.
+     * @return void
+     */
+    public function logLookup(string $identity, string $source, string $term): void
+    {
+        try {
+            $this->log('odlookup_search', [
+                'username'  => $identity,
+                'od_source' => $source,
+                'od_term'   => mb_substr($term, 0, 100),
+            ]);
+        } catch (\Throwable $e) {
+            $this->emError('[RedcapOneDirectoryLookup] Failed to write lookup audit log: ' . $e->getMessage());
+        }
     }
 
 

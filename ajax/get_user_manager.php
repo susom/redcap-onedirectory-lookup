@@ -5,7 +5,16 @@ namespace Stanford\RedcapOneDirectoryLookup;
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\Exception\GuzzleException;
 
-/** @var RedcapOneDirectoryLookup $module */
+/** @var Stanford\RedcapOneDirectoryLookup\RedcapOneDirectoryLookup $module */
+
+// Authorize the same way as the search endpoint: a REDCap session OR a webauth-
+// authenticated survey respondent (Shibboleth REMOTE_USER + valid survey context).
+$access = $module->authorizeLookup();
+if (!$access['allow']) {
+    http_response_code(403);
+    exit('Not authorized');
+}
+
 try{
     $userId = $_GET['user_id'] ?? null;
     if (!$userId) {

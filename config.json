@@ -28,6 +28,7 @@
         "ajax/get_user_photo",
         "ajax/get_user_manager"
     ],
+    "enable-no-auth-logging": true,
     "project-settings": [
         {
             "key": "instance",
@@ -333,6 +334,12 @@
             "key": "onedirectory-url",
             "name": "<b>URL to Onedirectory server:</b>",
             "required": true,
+            "type": "text"
+        },
+        {
+            "key": "survey-lookup-rate-limit",
+            "name": "<b>Survey lookup rate limit (per minute, per authenticated user):</b><br><i>(optional, default 30)</i> Applies only to unauthenticated survey lookups that pass webauth. Leave blank to use the default.",
+            "required": false,
             "type": "text"
         },
         {

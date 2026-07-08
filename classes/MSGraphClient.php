@@ -245,6 +245,14 @@ class MSGraphClient
         $this->module->emDebug('[MSGraphClient] fetchGraphPageByUrl() called');
         $this->module->emDebug('[MSGraphClient] Pagination URL: ' . $url);
 
+        // SSRF guard: only ever attach the Graph bearer token to a genuine Microsoft
+        // Graph URL. Without this, a caller-supplied next_page (e.g. from get_users.php)
+        // could exfiltrate the app-only access token to an attacker-controlled host.
+        if (!$this->isAllowedGraphUrl($url)) {
+            $this->module->emError('[MSGraphClient] Refusing to fetch non-Graph pagination URL: ' . $url);
+            return [];
+        }
+
         // Get (or refresh) the access token from system settings
         $accessToken = $this->getAccessToken();
         if (!$accessToken) {
@@ -322,21 +330,57 @@ class MSGraphClient
     private function buildSearchFilter(string $searchTerm): string
     {
         // Build Graph $search query string across key properties.
-        // Quotes inside the term are escaped for safety.
-        $term = trim($searchTerm);
-        // Escape double quotes since $search uses them as delimiters
-        $escaped = str_replace('"', '\"', $term);
+        // The term is allowlist-sanitized so it is treated strictly as a literal value.
+        $term = $this->sanitizeSearchTerm($searchTerm);
 
         // Use displayName, userPrincipalName, mail, mailNickname, givenName, surname
         return sprintf(
             "\"displayName:%s\" OR \"userPrincipalName:%s\" OR \"mail:%s\" OR \"mailNickname:%s\" OR \"givenName:%s\" OR \"surname:%s\"",
-            $escaped,
-            $escaped,
-            $escaped,
-            $escaped,
-            $escaped,
-            $escaped
+            $term,
+            $term,
+            $term,
+            $term,
+            $term,
+            $term
         );
+    }
+
+    /**
+     * Allowlist-sanitize a user-supplied search term.
+     *
+     * Keeps only characters meaningful for names/emails (Unicode letters/digits,
+     * whitespace, and @ . _ ' -). Every KQL/OData control character (double quotes,
+     * parentheses, colons, backslashes, etc.) is stripped, so the term cannot alter
+     * the structure of the Microsoft Graph query (CWE-943 / CWE-74).
+     *
+     * @param string $searchTerm
+     * @return string Sanitized, whitespace-collapsed term.
+     */
+    private function sanitizeSearchTerm(string $searchTerm): string
+    {
+        $term = preg_replace('/[^\p{L}\p{N}\s@._\'-]/u', ' ', $searchTerm);
+        return trim((string)preg_replace('/\s+/u', ' ', (string)$term));
+    }
+
+    /**
+     * Whether a URL is a safe Microsoft Graph endpoint the bearer token may be sent to.
+     *
+     * Only absolute https URLs whose host is exactly graph.microsoft.com are allowed.
+     * This is the authoritative guard against SSRF / access-token exfiltration through
+     * caller-supplied pagination links.
+     *
+     * @param string $url
+     * @return bool
+     */
+    private function isAllowedGraphUrl(string $url): bool
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts)) {
+            return false;
+        }
+        $scheme = strtolower($parts['scheme'] ?? '');
+        $host = strtolower($parts['host'] ?? '');
+        return $scheme === 'https' && $host === 'graph.microsoft.com';
     }
 
     /**
@@ -352,12 +396,31 @@ class MSGraphClient
      */
     public function searchUsers(string $searchTerm, $nextLink = null, $companyName = null): array
     {
+        // On a first-page request, refuse empty/too-short terms so a blank or
+        // punctuation-only search cannot enumerate the directory. (Pagination requests
+        // carry the query in $nextLink and are validated separately.)
+        if (is_null($nextLink) && mb_strlen($this->sanitizeSearchTerm($searchTerm)) < 2) {
+            return [
+                'count' => null,
+                'users' => [],
+                'preview' => [],
+                'nextLink' => null,
+                'prevLink' => null,
+                '@odata.nextLink' => null,
+            ];
+        }
+
         // Base $search expression on name/mail fields
         $search = $this->buildSearchFilter($searchTerm);
 
-        // If companyName is defined, use it as a filter; otherwise use the default Stanford org conditions
-        if (!empty($companyName)) {
-            $companyFilter = "companyName eq '" . str_replace("'", "''", $this->companyNameMap[$companyName]) . "'";
+        // Only treat companyName as a filter when it maps to a known Stanford org;
+        // otherwise fall back to the default Stanford org conditions.
+        $companyLabel = (!empty($companyName) && isset($this->companyNameMap[$companyName]))
+            ? $this->companyNameMap[$companyName]
+            : null;
+
+        if ($companyLabel !== null) {
+            $companyFilter = "companyName eq '" . str_replace("'", "''", $companyLabel) . "'";
         } else {
             // Single Graph $filter that OR-combines the 3 Stanford org conditions.
             // NOTE: Graph does not support contains() in $filter; domain checks use endswith(mail,'@domain').
@@ -500,8 +563,8 @@ class MSGraphClient
             ];
         }
 
-        $image = $this->module->getUrl('ajax/get_user_photo.php', true, true);
-        $managerURL = $this->module->getUrl('ajax/get_user_manager.php', true, true);
+        $image = $this->module->getUrl('ajax/get_user_photo.php', false, true);
+        $managerURL = $this->module->getUrl('ajax/get_user_manager.php', false, true);
         $users = [];
 
         // Get users array from response

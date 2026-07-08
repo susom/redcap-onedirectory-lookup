@@ -7,9 +7,32 @@ Fields = {
     cancel: false,
     SuImage: '',
     SoMImage: '',
+    isSurvey: false,       // set from fields.php; true on survey pages
+    webauthPrefix: '/webauth',
+    surveyHash: '',        // survey hash, used to route + validate survey lookups
     _imgCache: {}, // cache for preloaded images (brand + profiles)
     _acState: {}, // per-input autocomplete pagination state
+    // On survey pages, rewrite a same-origin module endpoint URL so it is routed through
+    // the Shibboleth-protected /webauth path (which sets REMOTE_USER), flagged NOAUTH, and
+    // carries the survey hash the server uses to validate context. No-op on non-survey pages.
+    decorate: function (url) {
+        if (!Fields.isSurvey || !url) return url;
+        try {
+            var u = new URL(url, window.location.origin);
+            if (u.origin !== window.location.origin) return url; // never touch cross-origin URLs
+            if (u.pathname.indexOf(Fields.webauthPrefix + '/') !== 0) {
+                u.pathname = Fields.webauthPrefix + u.pathname;
+            }
+            if (!u.searchParams.has('NOAUTH')) u.searchParams.set('NOAUTH', '1');
+            if (Fields.surveyHash) u.searchParams.set('survey_hash', Fields.surveyHash);
+            return u.toString();
+        } catch (e) {
+            return url;
+        }
+    },
     init: async function () {
+        // Route the search endpoint through /webauth on survey pages before anything uses it.
+        Fields.ajaxUrl = Fields.decorate(Fields.ajaxUrl);
         try {
             // Persist brand logos as data URLs in localStorage to bypass server no-store headers
             if (Fields.SuImage && Fields.SoMImage && window.fetch) {
@@ -188,6 +211,8 @@ Fields = {
                 var user = Fields.user;
                 // managerURL may come from the backend as part of the user payload
                 var managerUrl = user.managerURL || user.managerUrl || (user.array && (user.array.managerURL || user.array.managerUrl));
+                // Route the manager endpoint through /webauth on survey pages.
+                managerUrl = Fields.decorate(managerUrl);
 
 
                 // If we have a manager URL, fetch manager info before filling fields
@@ -290,6 +315,8 @@ Fields = {
             if (intendedSrc && companyName) {
                 intendedSrc = Fields.addQueryParam(intendedSrc, 'companyName', companyName);
             }
+            // Route the photo endpoint through /webauth on survey pages.
+            intendedSrc = Fields.decorate(intendedSrc);
             // Choose default image based on company and prefer preloaded cache
             var defaultKey = (companyName === 'Stanford University') ? 'SuImage' : 'SoMImage';
             var defaultUrl = Fields[defaultKey] || Fields.image || '';

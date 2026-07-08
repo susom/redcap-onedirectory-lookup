@@ -7,8 +7,22 @@ use GuzzleHttp\Exception\GuzzleException;
 
 /** @var RedcapOneDirectoryLookup $module */
 
+// Authorize the same way as the search endpoint: a REDCap session OR a webauth-
+// authenticated survey respondent (Shibboleth REMOTE_USER + valid survey context).
+$access = $module->authorizeLookup();
+if (!$access['allow']) {
+    http_response_code(403);
+    exit('Not authorized');
+}
+
 $userId = $_GET['user_id'] ?? null;
 $size   = $_GET['size']   ?? '120x120';
+
+// The size segment is placed directly into the Graph URL path; restrict it to the
+// documented WxH form so it cannot alter the request path.
+if (!preg_match('/^\d{1,4}x\d{1,4}$/', (string)$size)) {
+    $size = '120x120';
+}
 
 if (!$userId) {
     http_response_code(400);
