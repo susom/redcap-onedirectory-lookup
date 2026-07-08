@@ -5,11 +5,12 @@ namespace Stanford\RedcapOneDirectoryLookup;
 /** @var \Stanford\RedcapOneDirectoryLookup\RedcapOneDirectoryLookup $this */
 
 ?>
+<link rel="preload" as="image" href="<?php echo $this->getUrl('assets/images/stanford_university.png', true, true) ?>">
+<link rel="preload" as="image" href="<?php echo $this->getUrl('assets/images/stanford_medicine.png', true, true) ?>">
 <style>
     .ui-autocomplete-loading {
         background: url('<?php echo $this->getUrl("assets/images/progress_circle.gif", true, true) ?>') no-repeat right center;
         background-size: 20px 20px;
-        progress_circle . gif
     }
 
     .ui-autocomplete-input {
@@ -46,7 +47,20 @@ namespace Stanford\RedcapOneDirectoryLookup;
 <script src="<?php echo $this->getUrl("assets/js/fields.js", true, true) ?>"></script>
 
 <script>
-    Fields.ajaxUrl = '<?php echo $this->getUrl("ajax/get_users.php", true, true) ?>';
+    Fields.SuImage = '<?php echo $this->getUrl('assets/images/stanford_university.png', true, true) ?>';
+    Fields.SoMImage = '<?php echo $this->getUrl('assets/images/stanford_medicine.png', true, true) ?>';
+    Fields.ajaxUrl = '<?php echo $this->getUrl("ajax/get_users.php", false, true) ?>';
     Fields.image = '<?php echo $this->getUrl("assets/images/magnifier.png", true, true) ?>';
-    Fields.list = <?php echo json_encode($this->getFieldsMap()) ?>
+    Fields.list = <?php echo json_encode($this->getFieldsMap()) ?>;
+    // On survey pages, lookup requests must be routed through the Shibboleth-protected
+    // /webauth path so the endpoints receive the authenticated identity (REMOTE_USER).
+    Fields.isSurvey = <?php echo $this->getIsSurvey() ? 'true' : 'false' ?>;
+    Fields.webauthPrefix = '/webauth';
+    // Development servers have no /webauth path, so the client skips the prefix (see fields.js).
+    Fields.isDevServer = <?php echo RedcapOneDirectoryLookup::isDevServer() ? 'true' : 'false' ?>;
+    Fields.surveyHash = <?php echo json_encode((string)$this->getSurveyHash()) ?>;
+//run function once load is complete.
+        window.onload = function () {
+            Fields.init();
+        }
 </script>
