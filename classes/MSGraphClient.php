@@ -394,7 +394,7 @@ class MSGraphClient
      * @throws \Exception
      * @throws \Throwable
      */
-    public function searchUsers(string $searchTerm, $nextLink = null, $companyName = null): array
+    public function searchUsers(string $searchTerm, $nextLink = null, $companyName = null, ?array $allowedAttributes = null): array
     {
         // On a first-page request, refuse empty/too-short terms so a blank or
         // punctuation-only search cannot enumerate the directory. (Pagination requests
@@ -442,7 +442,7 @@ class MSGraphClient
             $companyFilter = $adult . ' or ' . $children . ' or ' . $university;
         }
 
-        return $this->getUsersByFilter($search, $nextLink, $companyFilter);
+        return $this->getUsersByFilter($search, $nextLink, $companyFilter, $allowedAttributes);
     }
 
 
@@ -528,7 +528,7 @@ class MSGraphClient
         return false;
     }
 
-    public function getUsersByFilter($search, $nextLink, $companyFilter = null)
+    public function getUsersByFilter($search, $nextLink, $companyFilter = null, ?array $allowedAttributes = null)
     {
         $response = null;
 
@@ -701,8 +701,10 @@ class MSGraphClient
         $nextLinkVar = $response['@odata.nextLink'] ?? null;
         return [
             'count' => $response['@odata.count'] ?? null,
-            'users' => $users,
-            'preview' => $this->createUserPreview($users),
+            // Full user records are intentionally NOT returned to the browser; only the
+            // configured (mapped) attributes are exposed, via preview[].array below.
+            'users' => [],
+            'preview' => $this->createUserPreview($users, $allowedAttributes),
             'nextLink' => $nextLinkVar,
             'prevLink' => $prevLinkVar,
             '@odata.nextLink' => $nextLinkVar,
@@ -762,7 +764,7 @@ class MSGraphClient
      * @param array $users Normalized users array from getUsersByFilter().
      * @return array
      */
-    private function createUserPreview($users)
+    private function createUserPreview($users, ?array $allowedAttributes = null)
     {
 
         $result = array();
@@ -780,17 +782,63 @@ class MSGraphClient
                     : $image;
 
                 $result[] = array(
+                    // Display metadata needed to render + choose an autocomplete row.
                     'id' => $user['id'],
                     'label' => $user['displayName'],
                     'title' => $user['jobTitle'],
-                    'suid' => $user['mailNickname'],
+                    'companyName' => $user['companyName'], // used client-side only for brand image
                     'value' => $user['displayName'],
-                    'array' => $user,
+                    // Data payload the client writes into REDCap fields: only mapped attributes.
+                    'array' => $this->reduceUser($user, $allowedAttributes),
                     'image' => $finalImage
                 );
             }
         }
         return $result;
+    }
+
+    /**
+     * Reduce a normalized user to only the attributes this project maps, plus the minimal
+     * functional keys the front-end needs. This prevents the full directory record (~46
+     * fields) from being exposed to the browser; only configured, mapped attributes leave
+     * the server.
+     *
+     * Manager sub-attributes (manager.*) are populated separately via the manager endpoint,
+     * so only the managerURL is included here (and only when a manager.* attribute is mapped).
+     *
+     * @param array      $user              Normalized user record.
+     * @param array|null $allowedAttributes Mapped OneDirectory attribute keys for this project.
+     * @return array Reduced attribute map.
+     */
+    private function reduceUser(array $user, ?array $allowedAttributes): array
+    {
+        if (!is_array($allowedAttributes)) {
+            $allowedAttributes = [];
+        }
+
+        $reduced = [];
+        $needsManager = false;
+        foreach ($allowedAttributes as $attr) {
+            if (!is_string($attr) || $attr === '') {
+                continue;
+            }
+            if ($attr === 'manager' || strpos($attr, 'manager.') === 0) {
+                // Manager data is fetched on selection via the manager endpoint, not here.
+                $needsManager = true;
+                continue;
+            }
+            if (array_key_exists($attr, $user)) {
+                $reduced[$attr] = $user[$attr];
+            }
+        }
+
+        // The client needs managerURL to fetch manager info, but only if a manager
+        // attribute is actually mapped.
+        if ($needsManager && isset($user['managerURL'])) {
+            $reduced['managerURL'] = $user['managerURL'];
+        }
+
+        return $reduced;
     }
 
     /**

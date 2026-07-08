@@ -114,10 +114,53 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
      * @throws \GuzzleHttp\Exception\GuzzleException
      * @throws ApiException
      */
-    public function searchUsers($term, $nextPage, $companyName)
+    public function searchUsers($term, $nextPage, $companyName, ?array $allowedAttributes = null)
     {
         // Build search object
-        return $this->getMSGraphClient()->searchUsers($term, $nextPage, $companyName);
+        return $this->getMSGraphClient()->searchUsers($term, $nextPage, $companyName, $allowedAttributes);
+    }
+
+
+    /**
+     * Return the set of OneDirectory attributes that are mapped to REDCap fields for a
+     * project, so the AJAX response can be limited to only those attributes.
+     *
+     * If a search field name is given, only the attributes mapped for that field's
+     * instance are returned; if that yields nothing (or no field is given), the union of
+     * all mapped attributes for the project is returned. The mapping is read from saved
+     * project configuration — never from client input — so a caller cannot request more.
+     *
+     * @param string|null $searchField REDCap field name of the lookup input (optional).
+     * @param int|string|null $projectId Project to read configuration from.
+     * @return string[] Distinct mapped attribute keys (e.g., 'mail', 'jobTitle', 'manager.mail').
+     */
+    public function getMappedAttributesForProject($searchField = null, $projectId = null): array
+    {
+        $instances = $this->getSubSettings('instance', $projectId);
+        $mappedAttributes = $this->getProjectSetting('one-directory-attribute', $projectId); // [instanceIdx][attrIdx]
+
+        if (!is_array($instances) || !is_array($mappedAttributes)) {
+            return [];
+        }
+
+        $collect = function ($index) use ($mappedAttributes) {
+            $attrs = $mappedAttributes[$index] ?? null;
+            return is_array($attrs) ? array_values($attrs) : [];
+        };
+
+        $matched = [];
+        $union = [];
+        foreach ($instances as $index => $instance) {
+            $attrs = $collect($index);
+            $union = array_merge($union, $attrs);
+            if ($searchField !== null && $searchField !== '' && ($instance['search-field'] ?? null) === $searchField) {
+                $matched = array_merge($matched, $attrs);
+            }
+        }
+
+        $result = !empty($matched) ? $matched : $union;
+        $result = array_filter($result, static fn($a) => is_string($a) && $a !== '');
+        return array_values(array_unique($result));
     }
 
 

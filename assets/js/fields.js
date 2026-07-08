@@ -153,7 +153,7 @@ Fields = {
                 }
                 var companyName = (inst && inst.companyName) || '';
                 var term = request.term;
-                $.getJSON(Fields.ajaxUrl, { term: term, companyName: companyName })
+                $.getJSON(Fields.ajaxUrl, { term: term, companyName: companyName, search_field: name })
                     .done(function (data) {
                         var items = [];
                         // Unwrap items
@@ -288,7 +288,7 @@ Fields = {
                 }
                 var companyName = (instObj && instObj.companyName) || '';
                 if (nextPageParam) {
-                    $.getJSON(Fields.ajaxUrl, { term: state.term, next_page: nextPageParam, companyName: companyName })
+                    $.getJSON(Fields.ajaxUrl, { term: state.term, next_page: nextPageParam, companyName: companyName, search_field: name })
                         .done(appendItems)
                         .fail(function () { $loading.remove(); state.loading = false; state.hasMore = false; $('<li class="ui-autocomplete-no-more">No more users</li>').appendTo($ul); });
                 } else {

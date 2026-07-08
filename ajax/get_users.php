@@ -86,7 +86,13 @@ try {
         }
     }
 
-    $response = $module->searchUsers($term, $nextLink, $companyName);
+    // Limit the response to only the attributes this project maps to REDCap fields.
+    // Read authoritatively from saved config (scoped to the lookup field when provided) —
+    // never from client input — so the full directory record is never exposed.
+    $searchField = isset($_GET['search_field']) ? (string)$_GET['search_field'] : '';
+    $allowedAttributes = $module->getMappedAttributesForProject($searchField, $access['projectId']);
+
+    $response = $module->searchUsers($term, $nextLink, $companyName, $allowedAttributes);
 
     if ($isSurveyPath && is_array($response)) {
         // Strip pagination links so survey clients cannot walk the directory.
