@@ -56,6 +56,8 @@ namespace Stanford\RedcapOneDirectoryLookup;
     // /webauth path so the endpoints receive the authenticated identity (REMOTE_USER).
     Fields.isSurvey = <?php echo $this->getIsSurvey() ? 'true' : 'false' ?>;
     Fields.webauthPrefix = '/webauth';
+    // Development servers have no /webauth path, so the client skips the prefix (see fields.js).
+    Fields.isDevServer = <?php echo RedcapOneDirectoryLookup::isDevServer() ? 'true' : 'false' ?>;
     Fields.surveyHash = <?php echo json_encode((string)$this->getSurveyHash()) ?>;
 //run function once load is complete.
         window.onload = function () {

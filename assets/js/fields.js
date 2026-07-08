@@ -8,6 +8,7 @@ Fields = {
     SuImage: '',
     SoMImage: '',
     isSurvey: false,       // set from fields.php; true on survey pages
+    isDevServer: false,    // set from fields.php; true on REDCap development servers
     webauthPrefix: '/webauth',
     surveyHash: '',        // survey hash, used to route + validate survey lookups
     _imgCache: {}, // cache for preloaded images (brand + profiles)
@@ -20,7 +21,11 @@ Fields = {
         try {
             var u = new URL(url, window.location.origin);
             if (u.origin !== window.location.origin) return url; // never touch cross-origin URLs
-            if (u.pathname.indexOf(Fields.webauthPrefix + '/') !== 0) {
+            // Prepend the Shibboleth-protected /webauth path so the endpoint receives
+            // REMOTE_USER — EXCEPT on localhost / development servers, where /webauth is not
+            // configured and would return a 404. We still add NOAUTH + survey_hash so the
+            // endpoint can validate the survey context in every environment.
+            if (!Fields.skipWebauthRouting() && u.pathname.indexOf(Fields.webauthPrefix + '/') !== 0) {
                 u.pathname = Fields.webauthPrefix + u.pathname;
             }
             if (!u.searchParams.has('NOAUTH')) u.searchParams.set('NOAUTH', '1');
@@ -29,6 +34,14 @@ Fields = {
         } catch (e) {
             return url;
         }
+    },
+    // /webauth only exists in production (Apache + mod_shib). Skip the prefix when REDCap's
+    // "development server" flag is set or when the site is served from localhost, so local/dev
+    // testing does not 404 on the injected lookup requests.
+    skipWebauthRouting: function () {
+        if (Fields.isDevServer === true) return true;
+        var h = (window.location.hostname || '').toLowerCase();
+        return h === 'localhost' || h === 'redcap.local' || h === '127.0.0.1' || h === '::1' || h === '[::1]';
     },
     init: async function () {
         // Route the search endpoint through /webauth on survey pages before anything uses it.

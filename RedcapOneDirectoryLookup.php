@@ -312,6 +312,23 @@ class RedcapOneDirectoryLookup extends \ExternalModules\AbstractExternalModule
 
         // The survey's project (from the validated hash) is authoritative over any URL pid.
         $decision['projectId'] = $surveyContext['project_id'] ?? $this->getProjectId();
+
+        // Observability: record WHY a lookup was allowed (or denied) so the behavior of the
+        // is_development_server flag and the webauth path is visible while testing. Note that
+        // an authenticated REDCap session ("source":"redcap") is allowed regardless of the
+        // development-server flag; that flag only gates the anonymous survey bypass, which
+        // additionally requires the "allow-dev-anonymous-bypass" opt-in. Only emitted when
+        // debug logging is enabled.
+        $this->emDebug('Lookup authorization decision', [
+            'allow'            => $decision['allow'],
+            'source'           => $decision['source'],
+            'reason'           => $decision['reason'],
+            'isAuthenticated'  => $isAuth,
+            'isDevServer'      => self::isDevServer(),
+            'devBypassEnabled' => $this->isDevAnonymousBypassEnabled(),
+            'hasRemoteUser'    => $this->getRemoteUser() !== '',
+        ]);
+
         return $decision;
     }
 
